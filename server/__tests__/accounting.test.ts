@@ -398,4 +398,92 @@ describe("Moving-Average Accounting Logic", () => {
       expect(state.avgCost.toString()).toBe("1000");
     });
   });
+
+  /**
+   * Test Case: TOMCL Scenario - User reported issue
+   * Buy 500 shares, then sell 250 shares
+   */
+  describe("TOMCL Scenario - Buy 500 Sell 250", () => {
+    it("should correctly handle buying 500 and selling 250 shares", () => {
+      let state = {
+        totalShares: new Decimal(0),
+        totalInvested: new Decimal(0),
+        avgCost: new Decimal(0),
+        realizedProfit: new Decimal(0),
+      };
+
+      // BUY 500 shares at 100 PKR each
+      const buy: Transaction = {
+        id: 1,
+        stockId: 1,
+        type: "BUY",
+        date: "2025-01-01",
+        quantity: "500",
+        totalAmount: "50000",
+        unitPrice: "100",
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      state = processTransaction(state, buy);
+      expect(state.totalShares.toString()).toBe("500");
+      expect(state.totalInvested.toString()).toBe("50000");
+      expect(state.avgCost.toString()).toBe("100");
+      expect(state.realizedProfit.toString()).toBe("0");
+
+      // SELL 250 shares at 120 PKR each
+      const sell: Transaction = {
+        id: 2,
+        stockId: 1,
+        type: "SELL",
+        date: "2025-01-05",
+        quantity: "250",
+        totalAmount: "30000",
+        unitPrice: "120",
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      state = processTransaction(state, sell);
+      
+      // After selling 250 out of 500 shares
+      expect(state.totalShares.toString()).toBe("250");
+      expect(state.totalInvested.toString()).toBe("25000"); // 250 * 100
+      expect(state.avgCost.toString()).toBe("100"); // Same avg cost
+      expect(state.realizedProfit.toString()).toBe("5000"); // (120 - 100) * 250
+    });
+
+    it("should handle selling all shares correctly", () => {
+      let state = {
+        totalShares: new Decimal(500),
+        totalInvested: new Decimal(50000),
+        avgCost: new Decimal(100),
+        realizedProfit: new Decimal(0),
+      };
+
+      // SELL all 500 shares at 120 PKR each
+      const sell: Transaction = {
+        id: 1,
+        stockId: 1,
+        type: "SELL",
+        date: "2025-01-05",
+        quantity: "500",
+        totalAmount: "60000",
+        unitPrice: "120",
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      state = processTransaction(state, sell);
+      
+      // After selling all shares
+      expect(state.totalShares.toString()).toBe("0");
+      expect(state.totalInvested.toString()).toBe("0");
+      expect(state.avgCost.toString()).toBe("0");
+      expect(state.realizedProfit.toString()).toBe("10000"); // (120 - 100) * 500
+    });
+  });
 });
