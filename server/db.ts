@@ -361,11 +361,12 @@ export function processTransaction(
       avgCost: newAvgCost,
     };
   } else if (txn.type === "SELL") {
-    const costRemoved = state.avgCost.times(quantity);
+    const sharesToSell = quantity.greaterThan(state.totalShares) ? state.totalShares : quantity;
+    const costRemoved = state.avgCost.times(sharesToSell);
     const proceeds = totalAmount;
     const realizedProfitThisTxn = proceeds.minus(costRemoved);
 
-    const newTotalShares = state.totalShares.minus(quantity);
+    const newTotalShares = state.totalShares.minus(sharesToSell);
     const newTotalInvested = state.totalInvested.minus(costRemoved);
     const newAvgCost = newTotalShares.isZero() ? new Decimal(0) : newTotalInvested.dividedBy(newTotalShares);
 

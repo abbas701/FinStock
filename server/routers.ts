@@ -48,11 +48,11 @@ const stockRouter = router({
         const totalInvested = aggregate ? parseFloat(aggregate.totalInvested) : 0;
         const realizedProfit = aggregate ? parseFloat(aggregate.realizedProfit) : 0;
         
-        const unrealizedProfit = aggregate && avgCost > 0 && totalShares > 0
+        const unrealizedProfit = aggregate && currentPrice > 0 && avgCost > 0 && totalShares > 0
           ? (currentPrice - avgCost) * totalShares
           : 0;
 
-        const gainLossPercent = aggregate && avgCost > 0
+        const gainLossPercent = aggregate && currentPrice > 0 && avgCost > 0
           ? ((currentPrice - avgCost) / avgCost) * 100
           : 0;
 

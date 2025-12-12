@@ -19,6 +19,7 @@ export default function Home() {
   const { data: stocks, isLoading, error } = trpc.stock.list.useQuery(undefined, {
     enabled: !!user,
   });
+  console.log(stocks);
 
   // Filter and sort state - MUST be before any conditional returns
   const [searchQuery, setSearchQuery] = useState("");
@@ -118,6 +119,7 @@ export default function Home() {
   }, 0) || 0;
   const totalValue = totalMarketValue; // Already in PKR
   const overallGainLoss = totalRealized + totalUnrealized;
+  console.log(totalInvested, totalRealized, totalUnrealized, overallGainLoss);
   const overallGainLossPercent = totalInvested > 0 ? (overallGainLoss / totalInvested) * 100 : 0;
 
   // Now we can do conditional returns
