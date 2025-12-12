@@ -7,6 +7,7 @@ describe("Moving-Average Accounting Logic", () => {
   /**
    * Test Case: KEL (Kisan Electric) Example
    * This is the example provided in the requirements
+   * All amounts are in PKR (not paise)
    */
   describe("KEL Example - Complete Buy/Sell Scenario", () => {
     it("should calculate average cost correctly after multiple buys", () => {
@@ -17,15 +18,15 @@ describe("Moving-Average Accounting Logic", () => {
         realizedProfit: new Decimal(0),
       };
 
-      // BUY 1: 100 shares at 500 PKR each = 50,000 PKR total (5,000,000 paise)
+      // BUY 1: 100 shares at 500 PKR each = 50,000 PKR total
       const buy1: Transaction = {
         id: 1,
         stockId: 1,
         type: "BUY",
-        date: new Date("2024-01-01"),
+        date: "2024-01-01",
         quantity: "100",
-        totalAmount: 5000000, // 50,000 PKR in paise
-        unitPrice: "50000",
+        totalAmount: "50000", // 50,000 PKR
+        unitPrice: "500",
         notes: "Buy 1",
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -33,18 +34,18 @@ describe("Moving-Average Accounting Logic", () => {
 
       state = processTransaction(state, buy1);
       expect(state.totalShares.toString()).toBe("100");
-      expect(state.totalInvested.toString()).toBe("5000000");
-      expect(state.avgCost.toString()).toBe("50000"); // 5,000,000 / 100 = 50,000
+      expect(state.totalInvested.toString()).toBe("50000");
+      expect(state.avgCost.toString()).toBe("500"); // 50,000 / 100 = 500
 
-      // BUY 2: 50 shares at 600 PKR each = 30,000 PKR total (3,000,000 paise)
+      // BUY 2: 50 shares at 600 PKR each = 30,000 PKR total
       const buy2: Transaction = {
         id: 2,
         stockId: 1,
         type: "BUY",
-        date: new Date("2024-01-05"),
+        date: "2024-01-05",
         quantity: "50",
-        totalAmount: 3000000, // 30,000 PKR in paise
-        unitPrice: "60000",
+        totalAmount: "30000", // 30,000 PKR
+        unitPrice: "600",
         notes: "Buy 2",
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -52,28 +53,28 @@ describe("Moving-Average Accounting Logic", () => {
 
       state = processTransaction(state, buy2);
       expect(state.totalShares.toString()).toBe("150");
-      expect(state.totalInvested.toString()).toBe("8000000");
-      // avg_cost = 8,000,000 / 150 = 53,333.33 paise
-      expect(new Decimal(state.avgCost).toDecimalPlaces(2).toString()).toBe("53333.33");
+      expect(state.totalInvested.toString()).toBe("80000");
+      // avg_cost = 80,000 / 150 = 533.33 PKR
+      expect(new Decimal(state.avgCost).toDecimalPlaces(2).toString()).toBe("533.33");
     });
 
     it("should calculate realized profit correctly on sell", () => {
       let state = {
         totalShares: new Decimal(150),
-        totalInvested: new Decimal(8000000),
-        avgCost: new Decimal("53333.33"),
+        totalInvested: new Decimal(80000),
+        avgCost: new Decimal(80000).dividedBy(150), // Calculate exact avgCost
         realizedProfit: new Decimal(0),
       };
 
-      // SELL: 75 shares at 700 PKR each = 52,500 PKR total (5,250,000 paise)
+      // SELL: 75 shares at 700 PKR each = 52,500 PKR total
       const sell: Transaction = {
         id: 3,
         stockId: 1,
         type: "SELL",
-        date: new Date("2024-01-10"),
+        date: "2024-01-10",
         quantity: "75",
-        totalAmount: 5250000, // 52,500 PKR in paise
-        unitPrice: "70000",
+        totalAmount: "52500", // 52,500 PKR
+        unitPrice: "700",
         notes: "Sell 75 shares",
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -81,15 +82,16 @@ describe("Moving-Average Accounting Logic", () => {
 
       state = processTransaction(state, sell);
 
-      // proceeds = 5,250,000 paise
-      // cost_removed = 53,333.33 * 75 = 4,000,000 paise (approx)
-      // realized_profit = 5,250,000 - 4,000,000 = 1,250,000 paise
-      const expectedCostRemoved = new Decimal("53333.33").times(75);
-      const expectedProfit = new Decimal(5250000).minus(expectedCostRemoved);
+      // proceeds = 52,500 PKR
+      // cost_removed = avgCost * 75
+      // realized_profit = 52,500 - cost_removed
+      const costRemoved = new Decimal(80000).dividedBy(150).times(75);
+      const expectedProfit = new Decimal(52500).minus(costRemoved);
 
       expect(state.totalShares.toString()).toBe("75");
-      expect(state.realizedProfit.toDecimalPlaces(0).toString()).toBe(expectedProfit.toDecimalPlaces(0).toString());
-      expect(new Decimal(state.avgCost).toDecimalPlaces(2).toString()).toBe("53333.33");
+      expect(state.realizedProfit.toDecimalPlaces(2).toString()).toBe(expectedProfit.toDecimalPlaces(2).toString());
+      // avgCost should remain the same after sell
+      expect(state.avgCost.toDecimalPlaces(2).toString()).toBe(new Decimal(80000).dividedBy(150).toDecimalPlaces(2).toString());
     });
   });
 
@@ -109,10 +111,10 @@ describe("Moving-Average Accounting Logic", () => {
         id: 1,
         stockId: 1,
         type: "BUY",
-        date: new Date(),
+        date: "2024-01-01",
         quantity: "10",
-        totalAmount: 100000, // 1000 PKR in paise
-        unitPrice: "10000",
+        totalAmount: "1000", // 1000 PKR
+        unitPrice: "100",
         notes: null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -121,16 +123,16 @@ describe("Moving-Average Accounting Logic", () => {
       state = processTransaction(state, buy);
 
       expect(state.totalShares.toString()).toBe("10");
-      expect(state.totalInvested.toString()).toBe("100000");
-      expect(state.avgCost.toString()).toBe("10000");
+      expect(state.totalInvested.toString()).toBe("1000");
+      expect(state.avgCost.toString()).toBe("100");
       expect(state.realizedProfit.toString()).toBe("0");
     });
 
     it("should handle a sell transaction with profit", () => {
       let state = {
         totalShares: new Decimal(10),
-        totalInvested: new Decimal(100000),
-        avgCost: new Decimal(10000),
+        totalInvested: new Decimal(1000),
+        avgCost: new Decimal(100),
         realizedProfit: new Decimal(0),
       };
 
@@ -138,10 +140,10 @@ describe("Moving-Average Accounting Logic", () => {
         id: 2,
         stockId: 1,
         type: "SELL",
-        date: new Date(),
+        date: "2024-01-01",
         quantity: "5",
-        totalAmount: 75000, // 750 PKR in paise (150 PKR per share)
-        unitPrice: "15000",
+        totalAmount: "750", // 750 PKR (150 PKR per share)
+        unitPrice: "150",
         notes: null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -149,20 +151,20 @@ describe("Moving-Average Accounting Logic", () => {
 
       state = processTransaction(state, sell);
 
-      // proceeds = 75,000 paise
-      // cost_removed = 10,000 * 5 = 50,000 paise
-      // realized_profit = 75,000 - 50,000 = 25,000 paise
+      // proceeds = 750 PKR
+      // cost_removed = 100 * 5 = 500 PKR
+      // realized_profit = 750 - 500 = 250 PKR
       expect(state.totalShares.toString()).toBe("5");
-      expect(state.totalInvested.toString()).toBe("50000");
-      expect(state.avgCost.toString()).toBe("10000");
-      expect(state.realizedProfit.toString()).toBe("25000");
+      expect(state.totalInvested.toString()).toBe("500");
+      expect(state.avgCost.toString()).toBe("100");
+      expect(state.realizedProfit.toString()).toBe("250");
     });
 
     it("should handle a sell transaction with loss", () => {
       let state = {
         totalShares: new Decimal(10),
-        totalInvested: new Decimal(100000),
-        avgCost: new Decimal(10000),
+        totalInvested: new Decimal(1000),
+        avgCost: new Decimal(100),
         realizedProfit: new Decimal(0),
       };
 
@@ -170,10 +172,10 @@ describe("Moving-Average Accounting Logic", () => {
         id: 2,
         stockId: 1,
         type: "SELL",
-        date: new Date(),
+        date: "2024-01-01",
         quantity: "5",
-        totalAmount: 40000, // 400 PKR in paise (80 PKR per share)
-        unitPrice: "8000",
+        totalAmount: "400", // 400 PKR (80 PKR per share)
+        unitPrice: "80",
         notes: null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -181,12 +183,12 @@ describe("Moving-Average Accounting Logic", () => {
 
       state = processTransaction(state, sell);
 
-      // proceeds = 40,000 paise
-      // cost_removed = 10,000 * 5 = 50,000 paise
-      // realized_profit = 40,000 - 50,000 = -10,000 paise (loss)
+      // proceeds = 400 PKR
+      // cost_removed = 100 * 5 = 500 PKR
+      // realized_profit = 400 - 500 = -100 PKR (loss)
       expect(state.totalShares.toString()).toBe("5");
-      expect(state.totalInvested.toString()).toBe("50000");
-      expect(state.realizedProfit.toString()).toBe("-10000");
+      expect(state.totalInvested.toString()).toBe("500");
+      expect(state.realizedProfit.toString()).toBe("-100");
     });
   });
 
@@ -197,8 +199,8 @@ describe("Moving-Average Accounting Logic", () => {
     it("should add dividend to realized profit without changing shares", () => {
       let state = {
         totalShares: new Decimal(100),
-        totalInvested: new Decimal(1000000),
-        avgCost: new Decimal(10000),
+        totalInvested: new Decimal(10000),
+        avgCost: new Decimal(100),
         realizedProfit: new Decimal(0),
       };
 
@@ -206,9 +208,9 @@ describe("Moving-Average Accounting Logic", () => {
         id: 1,
         stockId: 1,
         type: "DIVIDEND",
-        date: new Date(),
+        date: "2024-01-01",
         quantity: null,
-        totalAmount: 50000, // 500 PKR dividend in paise
+        totalAmount: "500", // 500 PKR dividend
         unitPrice: null,
         notes: "Dividend payout",
         createdAt: new Date(),
@@ -218,16 +220,16 @@ describe("Moving-Average Accounting Logic", () => {
       state = processTransaction(state, dividend);
 
       expect(state.totalShares.toString()).toBe("100");
-      expect(state.totalInvested.toString()).toBe("1000000");
-      expect(state.avgCost.toString()).toBe("10000");
-      expect(state.realizedProfit.toString()).toBe("50000");
+      expect(state.totalInvested.toString()).toBe("10000");
+      expect(state.avgCost.toString()).toBe("100");
+      expect(state.realizedProfit.toString()).toBe("500");
     });
 
     it("should accumulate multiple dividends", () => {
       let state = {
         totalShares: new Decimal(100),
-        totalInvested: new Decimal(1000000),
-        avgCost: new Decimal(10000),
+        totalInvested: new Decimal(10000),
+        avgCost: new Decimal(100),
         realizedProfit: new Decimal(0),
       };
 
@@ -235,9 +237,9 @@ describe("Moving-Average Accounting Logic", () => {
         id: 1,
         stockId: 1,
         type: "DIVIDEND",
-        date: new Date("2024-01-01"),
+        date: "2024-01-01",
         quantity: null,
-        totalAmount: 50000,
+        totalAmount: "500",
         unitPrice: null,
         notes: null,
         createdAt: new Date(),
@@ -248,9 +250,9 @@ describe("Moving-Average Accounting Logic", () => {
         id: 2,
         stockId: 1,
         type: "DIVIDEND",
-        date: new Date("2024-06-01"),
+        date: "2024-06-01",
         quantity: null,
-        totalAmount: 50000,
+        totalAmount: "500",
         unitPrice: null,
         notes: null,
         createdAt: new Date(),
@@ -260,7 +262,7 @@ describe("Moving-Average Accounting Logic", () => {
       state = processTransaction(state, dividend1);
       state = processTransaction(state, dividend2);
 
-      expect(state.realizedProfit.toString()).toBe("100000");
+      expect(state.realizedProfit.toString()).toBe("1000");
     });
   });
 
@@ -271,8 +273,8 @@ describe("Moving-Average Accounting Logic", () => {
     it("should set avg_cost to 0 when all shares are sold", () => {
       let state = {
         totalShares: new Decimal(10),
-        totalInvested: new Decimal(100000),
-        avgCost: new Decimal(10000),
+        totalInvested: new Decimal(1000),
+        avgCost: new Decimal(100),
         realizedProfit: new Decimal(0),
       };
 
@@ -280,10 +282,10 @@ describe("Moving-Average Accounting Logic", () => {
         id: 1,
         stockId: 1,
         type: "SELL",
-        date: new Date(),
+        date: "2024-01-01",
         quantity: "10",
-        totalAmount: 150000, // 1500 PKR in paise
-        unitPrice: "15000",
+        totalAmount: "1500", // 1500 PKR
+        unitPrice: "150",
         notes: null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -294,7 +296,7 @@ describe("Moving-Average Accounting Logic", () => {
       expect(state.totalShares.toString()).toBe("0");
       expect(state.totalInvested.toString()).toBe("0");
       expect(state.avgCost.toString()).toBe("0");
-      expect(state.realizedProfit.toString()).toBe("50000");
+      expect(state.realizedProfit.toString()).toBe("500");
     });
   });
 
@@ -315,53 +317,53 @@ describe("Moving-Average Accounting Logic", () => {
         id: 1,
         stockId: 1,
         type: "BUY",
-        date: new Date(),
+        date: "2024-01-01",
         quantity: "100",
-        totalAmount: 1000000,
-        unitPrice: "10000",
+        totalAmount: "10000",
+        unitPrice: "100",
         notes: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
       state = processTransaction(state, buy1);
-      expect(state.avgCost.toString()).toBe("10000");
+      expect(state.avgCost.toString()).toBe("100");
 
       // BUY 50 @ 120
       const buy2: Transaction = {
         id: 2,
         stockId: 1,
         type: "BUY",
-        date: new Date(),
+        date: "2024-01-01",
         quantity: "50",
-        totalAmount: 600000,
-        unitPrice: "12000",
+        totalAmount: "6000",
+        unitPrice: "120",
         notes: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
       state = processTransaction(state, buy2);
-      // avg_cost = 1,600,000 / 150 = 10,666.67
-      expect(new Decimal(state.avgCost).toDecimalPlaces(2).toString()).toBe("10666.67");
+      // avg_cost = 16,000 / 150 = 106.67
+      expect(new Decimal(state.avgCost).toDecimalPlaces(2).toString()).toBe("106.67");
 
       // SELL 75 @ 150
       const sell: Transaction = {
         id: 3,
         stockId: 1,
         type: "SELL",
-        date: new Date(),
+        date: "2024-01-01",
         quantity: "75",
-        totalAmount: 1125000,
-        unitPrice: "15000",
+        totalAmount: "11250",
+        unitPrice: "150",
         notes: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
       state = processTransaction(state, sell);
-      // proceeds = 1,125,000
-      // cost_removed = 10,666.67 * 75 = 800,000
-      // realized_profit = 1,125,000 - 800,000 = 325,000
+      // proceeds = 11,250
+      // cost_removed = 106.67 * 75 = 8,000
+      // realized_profit = 11,250 - 8,000 = 3,250
       expect(state.totalShares.toString()).toBe("75");
-      expect(new Decimal(state.realizedProfit).toDecimalPlaces(0).toString()).toMatch(/32[0-9]{4}/);
+      expect(new Decimal(state.realizedProfit).toDecimalPlaces(0).toString()).toMatch(/325[0-9]/);
     });
   });
 
@@ -381,10 +383,10 @@ describe("Moving-Average Accounting Logic", () => {
         id: 1,
         stockId: 1,
         type: "BUY",
-        date: new Date(),
+        date: "2024-01-01",
         quantity: "10.5",
-        totalAmount: 1050000, // 10,500 PKR in paise
-        unitPrice: "100000",
+        totalAmount: "10500", // 10,500 PKR
+        unitPrice: "1000",
         notes: null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -393,7 +395,7 @@ describe("Moving-Average Accounting Logic", () => {
       state = processTransaction(state, buy);
 
       expect(state.totalShares.toString()).toBe("10.5");
-      expect(state.avgCost.toString()).toBe("100000");
+      expect(state.avgCost.toString()).toBe("1000");
     });
   });
 });

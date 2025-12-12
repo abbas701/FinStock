@@ -112,11 +112,11 @@ export default function Home() {
   // Calculate total market value from current prices
   const totalMarketValue = stocks?.reduce((sum, s) => {
     if (s.currentPrice > 0 && parseFloat(s.totalShares) > 0) {
-      return sum + ((s.currentPrice / 100) * parseFloat(s.totalShares));
+      return sum + (s.currentPrice * parseFloat(s.totalShares));
     }
     return sum;
   }, 0) || 0;
-  const totalValue = totalMarketValue * 100; // Convert to paise for formatCurrency
+  const totalValue = totalMarketValue; // Already in PKR
   const overallGainLoss = totalRealized + totalUnrealized;
   const overallGainLossPercent = totalInvested > 0 ? (overallGainLoss / totalInvested) * 100 : 0;
 
@@ -396,7 +396,7 @@ export default function Home() {
                 <TableBody>
                   {filteredAndSortedStocks.map((stock) => {
                     const marketValue = stock.currentPrice > 0 && parseFloat(stock.totalShares) > 0
-                      ? (stock.currentPrice / 100) * parseFloat(stock.totalShares)
+                      ? stock.currentPrice * parseFloat(stock.totalShares)
                       : 0;
                     return (
                       <TableRow
@@ -422,7 +422,7 @@ export default function Home() {
                             : <span className="text-gray-400">N/A</span>}
                         </TableCell>
                         <TableCell className="text-right font-medium text-gray-900 dark:text-gray-100">
-                          {marketValue > 0 ? `PKR ${marketValue.toFixed(2)}` : "-"}
+                          {marketValue > 0 ? formatCurrency(marketValue) : "-"}
                         </TableCell>
                         <TableCell className="text-right">
                           <span

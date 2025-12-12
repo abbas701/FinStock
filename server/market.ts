@@ -11,7 +11,7 @@ const yahooFinance = new YahooFinance();
 
 export interface MarketPrice {
   symbol: string;
-  price: number; // in paise (PKR * 100)
+  price: number; // in PKR
   currency: string;
   timestamp: Date;
 }
@@ -60,16 +60,14 @@ async function fetchFromYahooFinance2(symbol: string): Promise<number> {
     const price = result?.regularMarketPrice;
     
     if (typeof price === "number" && price > 0 && !isNaN(price)) {
-      const priceInPaise = Math.round(price * 100);
-      console.log(`[Market] Successfully fetched price for ${upperSymbol}: ${price} PKR (${priceInPaise} paise)`);
-      return priceInPaise;
+      console.log(`[Market] Successfully fetched price for ${upperSymbol}: ${price} PKR`);
+      return price;
     } else {
       // Try alternative price fields
       const altPrice = result?.price || result?.regularMarketPrice?.raw;
       if (typeof altPrice === "number" && altPrice > 0 && !isNaN(altPrice)) {
-        const priceInPaise = Math.round(altPrice * 100);
-        console.log(`[Market] Successfully fetched price for ${upperSymbol} (alt field): ${altPrice} PKR (${priceInPaise} paise)`);
-        return priceInPaise;
+        console.log(`[Market] Successfully fetched price for ${upperSymbol} (alt field): ${altPrice} PKR`);
+        return altPrice;
       }
       
       console.warn(`[Market] Invalid or missing price for ${upperSymbol}. Result:`, JSON.stringify(result, null, 2));
@@ -111,8 +109,8 @@ async function fetchFromAlphaVantage(symbol: string, apiKey: string): Promise<nu
       throw new Error("Could not extract price from Alpha Vantage response");
     }
 
-    // Convert to paise (PKR * 100)
-    return Math.round(price * 100);
+    // Return price in PKR
+    return price;
   } catch (error) {
     console.error(`[Market] Alpha Vantage fetch failed for ${symbol}:`, error);
     throw new Error(`Failed to fetch price for ${symbol} from Alpha Vantage`);
@@ -183,7 +181,7 @@ export async function getMarketPrice(symbol: string): Promise<MarketPrice> {
 export function calculateUnrealizedProfit(
   totalShares: Decimal,
   avgCost: Decimal,
-  currentPrice: number // in paise
+  currentPrice: number // in PKR
 ): number {
   const currentPriceDecimal = new Decimal(currentPrice);
   const unrealized = currentPriceDecimal.minus(avgCost).times(totalShares);
