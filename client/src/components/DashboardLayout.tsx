@@ -42,15 +42,12 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [sidebarWidth, setSidebarWidth] = useState(() => {
-    const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
-    return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
-  });
+  // Removed client-side persistence of sidebar width. Initialize
+  // to the default and keep it in-memory only.
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_WIDTH);
   const { loading, user } = useAuth();
 
-  useEffect(() => {
-    localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
-  }, [sidebarWidth]);
+  // Intentionally do not persist sidebar width to `localStorage`.
 
   if (loading) {
     return <DashboardLayoutSkeleton />

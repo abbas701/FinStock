@@ -15,7 +15,6 @@
  *     }]
  *   });
  */
-import { storagePut } from "server/storage";
 import { ENV } from "./env";
 
 export type GenerateImageOptions = {
@@ -78,15 +77,12 @@ export async function generateImage(
     };
   };
   const base64Data = result.image.b64Json;
-  const buffer = Buffer.from(base64Data, "base64");
+  const mimeType = result.image.mimeType || "image/png";
 
-  // Save to S3
-  const { url } = await storagePut(
-    `generated/${Date.now()}.png`,
-    buffer,
-    result.image.mimeType
-  );
-  return {
-    url,
-  };
+  // Instead of uploading to an external storage proxy, return a
+  // data URL so callers can display/save it client-side. This removes
+  // the external storage dependency and keeps persistence in Postgres
+  // (or handled explicitly by the app later).
+  const dataUrl = `data:${mimeType};base64,${base64Data}`;
+  return { url: dataUrl };
 }

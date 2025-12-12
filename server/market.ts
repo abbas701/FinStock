@@ -153,10 +153,10 @@ export async function getMarketPrice(symbol: string): Promise<MarketPrice> {
       }
     } else if (provider === "yahoo_finance2" || provider === "yahoo_unofficial") {
       // Use yahoo-finance2 package (default)
-      price = await fetchFromYahooFinance2(upperSymbol);
+      // price = await fetchFromYahooFinance2(upperSymbol);
     } else {
       console.warn(`[Market] Unknown provider: ${provider} for ${upperSymbol}, using yahoo_finance2`);
-      price = await fetchFromYahooFinance2(upperSymbol);
+      // price = await fetchFromYahooFinance2(upperSymbol);
     }
   } catch (error) {
     console.warn(`[Market] Failed to fetch price for ${upperSymbol}:`, error);

@@ -22,10 +22,10 @@ export function ThemeProvider({
   switchable = false,
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(() => {
-    if (switchable) {
-      const stored = localStorage.getItem("theme");
-      return (stored as Theme) || defaultTheme;
-    }
+    // Removed `localStorage` persistence. Always initialize from the
+    // provided `defaultTheme`. The `switchable` prop still controls
+    // whether the UI exposes a toggle, but the choice will not be
+    // persisted across sessions here.
     return defaultTheme;
   });
 
@@ -38,7 +38,8 @@ export function ThemeProvider({
     }
 
     if (switchable) {
-      localStorage.setItem("theme", theme);
+      // Intentionally do not persist into localStorage per project
+      // request to remove client-side persistence.
     }
   }, [theme, switchable]);
 
