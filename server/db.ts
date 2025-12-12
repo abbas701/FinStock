@@ -5,6 +5,10 @@ import { InsertUser, users, stocks, transactions, watchlist, stockAggregates, St
 import { ENV } from './_core/env';
 import Decimal from "decimal.js";
 
+// Precision constants for decimal values
+const SHARE_PRECISION = 8; // Precision for share quantities and avgCost
+const CURRENCY_PRECISION = 2; // Precision for currency amounts (PKR)
+
 let _db: ReturnType<typeof drizzle> | null = null;
 let _client: ReturnType<typeof postgres> | null = null;
 
@@ -323,12 +327,12 @@ export async function recomputeAggregates(stockId: number) {
     .where(eq(stockAggregates.stockId, stockId))
     .limit(1);
 
-  // Prepare values for database update
+  // Prepare values for database update with appropriate precision
   const aggregateValues = {
-    totalShares: state.totalShares.toFixed(8),
-    totalInvested: state.totalInvested.toFixed(2),
-    avgCost: state.avgCost.toFixed(8),
-    realizedProfit: state.realizedProfit.toFixed(2),
+    totalShares: state.totalShares.toFixed(SHARE_PRECISION),
+    totalInvested: state.totalInvested.toFixed(CURRENCY_PRECISION),
+    avgCost: state.avgCost.toFixed(SHARE_PRECISION),
+    realizedProfit: state.realizedProfit.toFixed(CURRENCY_PRECISION),
   };
 
   console.log(`[DB] Prepared aggregate values for stockId ${stockId}:`, aggregateValues);
@@ -344,15 +348,13 @@ export async function recomputeAggregates(stockId: number) {
     } else {
       // Update existing aggregate
       console.log(`[DB] Updating existing aggregate for stockId ${stockId}`);
-      const result = await db
+      await db
         .update(stockAggregates)
         .set({
           ...aggregateValues,
           updatedAt: new Date(),
         })
         .where(eq(stockAggregates.stockId, stockId));
-      
-      console.log(`[DB] Update completed for stockId ${stockId}`);
     }
   } catch (error) {
     console.error(`[DB] Failed to update stockAggregates for stockId ${stockId}:`, error);
