@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { formatCurrency, parseToPane, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import { useLocation, Link } from "wouter";
 import Decimal from "decimal.js";
 import { useState } from "react";
@@ -56,14 +56,12 @@ export default function Entry() {
     if (transactionType === "SELL" && existingStock && quantity) {
       const totalShares = new Decimal(existingStock.totalShares || "0");
       const qty = new Decimal(quantity);
-      // avgCost is stored in paise, convert to PKR for comparison
-      const avgCostPaise = new Decimal(existingStock.avgCost || "0");
-      const avgCostPKR = avgCostPaise.dividedBy(100);
+      // avgCost is stored in PKR
+      const avgCost = new Decimal(existingStock.avgCost || "0");
 
-      // totalAmount is in PKR (user input), convert to paise
-      const totalAmountPaise = parseToPane(parseFloat(totalAmount));
-      const sellPricePaise = new Decimal(totalAmountPaise).dividedBy(qty);
-      const sellPricePKR = sellPricePaise.dividedBy(100);
+      // totalAmount is in PKR (user input)
+      const totalAmountDecimal = new Decimal(totalAmount);
+      const sellPrice = totalAmountDecimal.dividedBy(qty);
 
       if (qty.greaterThan(totalShares) && !confirmOverride) {
         setWarningMessage(
@@ -73,9 +71,9 @@ export default function Entry() {
         return;
       }
 
-      if (sellPricePKR.lessThan(avgCostPKR) && !confirmOverride) {
+      if (sellPrice.lessThan(avgCost) && !confirmOverride) {
         setWarningMessage(
-          `You are selling at ${sellPricePKR.toFixed(2)} PKR/share below your average cost of ${avgCostPKR.toFixed(2)} PKR/share. Confirm to proceed.`
+          `You are selling at ${sellPrice.toFixed(2)} PKR/share below your average cost of ${avgCost.toFixed(2)} PKR/share. Confirm to proceed.`
         );
         setShowWarning(true);
         return;
@@ -95,7 +93,7 @@ export default function Entry() {
         type: transactionType,
         date: new Date(date),
         quantity: transactionType === "DIVIDEND" ? null : (quantity || null),
-        totalAmount: parseToPane(parseFloat(totalAmount)),
+        totalAmount: totalAmount,
         notes: notes || undefined,
         confirmOverride,
       });

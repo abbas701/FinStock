@@ -107,7 +107,7 @@ export default function StockDetail() {
             <CardTitle className="text-sm font-medium">Total Invested</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{aggregate ? formatCurrency(aggregate.totalInvested) : "0"}</p>
+            <p className="text-2xl font-bold">{aggregate ? formatCurrency(parseFloat(aggregate.totalInvested)) : "0"}</p>
           </CardContent>
         </Card>
 
@@ -127,8 +127,8 @@ export default function StockDetail() {
             <CardTitle className="text-sm font-medium">Realized Profit</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className={`text-2xl font-bold ${aggregate && aggregate.realizedProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
-              {aggregate ? formatCurrency(aggregate.realizedProfit) : "0"}
+            <p className={`text-2xl font-bold ${aggregate && parseFloat(aggregate.realizedProfit) >= 0 ? "text-green-600" : "text-red-600"}`}>
+              {aggregate ? formatCurrency(parseFloat(aggregate.realizedProfit)) : "0"}
             </p>
           </CardContent>
         </Card>
@@ -170,7 +170,7 @@ export default function StockDetail() {
                       <TableCell className="text-right">
                         {txn.unitPrice ? formatCurrency(parseFloat(txn.unitPrice)) : "-"}
                       </TableCell>
-                      <TableCell className="text-right">{formatCurrency(txn.totalAmount)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(parseFloat(txn.totalAmount))}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{txn.notes || "-"}</TableCell>
                       <TableCell className="text-center">
                         <Button

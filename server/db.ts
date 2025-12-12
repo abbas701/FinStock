@@ -123,9 +123,9 @@ export async function createStock(symbol: string, name: string) {
   await db.insert(stockAggregates).values({
     stockId,
     totalShares: "0",
-    totalInvested: 0,
+    totalInvested: "0",
     avgCost: "0",
-    realizedProfit: 0,
+    realizedProfit: "0",
   });
 
   return { id: stockId, symbol: symbol.toUpperCase(), name };
@@ -203,7 +203,7 @@ export async function addTransaction(
   type: "BUY" | "SELL" | "DIVIDEND",
   date: Date,
   quantity: string | null,
-  totalAmount: number,
+  totalAmount: string,
   notes?: string
 ) {
   const db = await getDb();
@@ -231,7 +231,7 @@ export async function updateTransaction(
   type: "BUY" | "SELL" | "DIVIDEND",
   date: Date,
   quantity: string | null,
-  totalAmount: number,
+  totalAmount: string,
   notes?: string
 ) {
   const db = await getDb();
@@ -313,9 +313,9 @@ export async function recomputeAggregates(stockId: number) {
     await db.insert(stockAggregates).values({
       stockId,
       totalShares: state.totalShares.toString(),
-      totalInvested: state.totalInvested.toNumber(),
+      totalInvested: state.totalInvested.toString(),
       avgCost: state.avgCost.toString(),
-      realizedProfit: state.realizedProfit.toNumber(),
+      realizedProfit: state.realizedProfit.toString(),
     });
   } else {
     // Update existing aggregate
@@ -324,9 +324,9 @@ export async function recomputeAggregates(stockId: number) {
       .update(stockAggregates)
       .set({
         totalShares: state.totalShares.toString(),
-        totalInvested: state.totalInvested.toNumber(),
+        totalInvested: state.totalInvested.toString(),
         avgCost: state.avgCost.toString(),
-        realizedProfit: state.realizedProfit.toNumber(),
+        realizedProfit: state.realizedProfit.toString(),
         updatedAt: new Date(),
       })
       .where(eq(stockAggregates.stockId, stockId));
@@ -335,6 +335,7 @@ export async function recomputeAggregates(stockId: number) {
 
 /**
  * Process a single transaction and update state
+ * All amounts are in PKR (not paise)
  */
 export function processTransaction(
   state: {

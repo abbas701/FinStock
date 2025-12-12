@@ -35,22 +35,25 @@ const stockRouter = router({
 
         try {
           const priceData = await getMarketPrice(stock.symbol);
-          // Only use price if it's greater than 0 (valid price)
+          // Price is in PKR
           currentPrice = priceData.price > 0 ? priceData.price : 0;
         } catch (error) {
           console.error(`Failed to fetch price for ${stock.symbol}:`, error);
           currentPrice = 0;
         }
 
-        // currentPrice is in paise, avgCost is also in paise (stored as decimal string)
-        const avgCostPaise = aggregate ? parseFloat(aggregate.avgCost) : 0;
+        // All values are in PKR
+        const avgCost = aggregate ? parseFloat(aggregate.avgCost) : 0;
         const totalShares = aggregate ? parseFloat(aggregate.totalShares) : 0;
-        const unrealizedProfit = aggregate && avgCostPaise > 0
-          ? (currentPrice - avgCostPaise) * totalShares
+        const totalInvested = aggregate ? parseFloat(aggregate.totalInvested) : 0;
+        const realizedProfit = aggregate ? parseFloat(aggregate.realizedProfit) : 0;
+        
+        const unrealizedProfit = aggregate && avgCost > 0 && totalShares > 0
+          ? (currentPrice - avgCost) * totalShares
           : 0;
 
-        const gainLossPercent = aggregate && avgCostPaise > 0
-          ? ((currentPrice - avgCostPaise) / avgCostPaise) * 100
+        const gainLossPercent = aggregate && avgCost > 0
+          ? ((currentPrice - avgCost) / avgCost) * 100
           : 0;
 
         return {
@@ -59,10 +62,10 @@ const stockRouter = router({
           name: stock.name,
           totalShares: aggregate?.totalShares || "0",
           avgCost: aggregate?.avgCost || "0",
-          totalInvested: aggregate?.totalInvested || 0,
+          totalInvested,
           currentPrice,
           unrealizedProfit,
-          realizedProfit: aggregate?.realizedProfit || 0,
+          realizedProfit,
           gainLossPercent,
         };
       })
@@ -91,15 +94,15 @@ const stockRouter = router({
         console.error(`Failed to fetch price for ${stock.symbol}:`, error);
       }
 
-      // currentPrice is in paise, avgCost is also in paise (stored as decimal string)
-      const avgCostPaise = aggregate ? parseFloat(aggregate.avgCost) : 0;
+      // All values are in PKR
+      const avgCost = aggregate ? parseFloat(aggregate.avgCost) : 0;
       const totalShares = aggregate ? parseFloat(aggregate.totalShares) : 0;
-      const unrealizedProfit = aggregate && avgCostPaise > 0
-        ? (currentPrice - avgCostPaise) * totalShares
+      const unrealizedProfit = aggregate && avgCost > 0 && totalShares > 0
+        ? (currentPrice - avgCost) * totalShares
         : 0;
 
-      const gainLossPercent = aggregate && avgCostPaise > 0
-        ? ((currentPrice - avgCostPaise) / avgCostPaise) * 100
+      const gainLossPercent = aggregate && avgCost > 0
+        ? ((currentPrice - avgCost) / avgCost) * 100
         : 0;
 
       return {
@@ -127,7 +130,7 @@ const transactionRouter = router({
         type: z.enum(["BUY", "SELL", "DIVIDEND"]),
         date: z.date(),
         quantity: z.string().nullable(),
-        totalAmount: z.number(),
+        totalAmount: z.string(),
         notes: z.string().optional(),
         confirmOverride: z.boolean().optional(),
       })
@@ -155,7 +158,7 @@ const transactionRouter = router({
         type: z.enum(["BUY", "SELL", "DIVIDEND"]),
         date: z.date(),
         quantity: z.string().nullable(),
-        totalAmount: z.number(),
+        totalAmount: z.string(),
         notes: z.string().optional(),
       })
     )

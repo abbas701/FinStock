@@ -44,7 +44,7 @@ export type InsertStock = typeof stocks.$inferInsert;
 
 /**
  * Transaction table: stores buy, sell, and dividend transactions.
- * Amounts stored as integers in paise (PKR * 100) for exactness.
+ * Amounts stored as DECIMAL in PKR for precision.
  * unitPrice is computed as totalAmount / quantity for BUY/SELL.
  */
 export const transactionTypeEnum = pgEnum("transaction_type", ["BUY", "SELL", "DIVIDEND"]);
@@ -55,7 +55,7 @@ export const transactions = pgTable("transactions", {
   type: transactionTypeEnum("type").notNull(),
   date: date("date").notNull(),
   quantity: decimal("quantity", { precision: 18, scale: 8 }), // nullable for DIVIDEND
-  totalAmount: integer("totalAmount").notNull(), // in paise (PKR * 100)
+  totalAmount: decimal("totalAmount", { precision: 18, scale: 2 }).notNull(), // in PKR
   unitPrice: decimal("unitPrice", { precision: 18, scale: 8 }), // computed for BUY/SELL
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -85,9 +85,9 @@ export const stockAggregates = pgTable("stockAggregates", {
   id: serial("id").primaryKey(),
   stockId: integer("stockId").notNull().unique(),
   totalShares: decimal("totalShares", { precision: 18, scale: 8 }).notNull().default("0"),
-  totalInvested: integer("totalInvested").notNull().default(0), // in paise
-  avgCost: decimal("avgCost", { precision: 18, scale: 8 }).notNull().default("0"),
-  realizedProfit: integer("realizedProfit").notNull().default(0), // in paise
+  totalInvested: decimal("totalInvested", { precision: 18, scale: 2 }).notNull().default("0"), // in PKR
+  avgCost: decimal("avgCost", { precision: 18, scale: 8 }).notNull().default("0"), // in PKR per share
+  realizedProfit: decimal("realizedProfit", { precision: 18, scale: 2 }).notNull().default("0"), // in PKR
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 

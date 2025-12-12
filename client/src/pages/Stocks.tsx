@@ -188,7 +188,7 @@ export default function Stocks() {
                         <TableCell className="text-gray-700 dark:text-gray-300">{stock.name}</TableCell>
                         <TableCell className="text-right font-medium text-gray-900 dark:text-gray-100">
                           {stock.currentPrice > 0
-                            ? `PKR ${(stock.currentPrice / 100).toFixed(2)}`
+                            ? `PKR ${stock.currentPrice.toFixed(2)}`
                             : "N/A"}
                         </TableCell>
                         <TableCell className="text-right text-gray-700 dark:text-gray-300">

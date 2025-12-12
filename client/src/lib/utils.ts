@@ -6,16 +6,16 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Format paise (PKR * 100) to PKR currency string
+ * Format PKR currency string
  */
-export function formatCurrency(paise: number): string {
-  const pkr = paise / 100;
+export function formatCurrency(pkr: number | string): string {
+  const amount = typeof pkr === "string" ? parseFloat(pkr) : pkr;
   return new Intl.NumberFormat("en-PK", {
     style: "currency",
     currency: "PKR",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(pkr);
+  }).format(amount);
 }
 
 /**
@@ -30,18 +30,4 @@ export function formatPercent(percent: number): string {
  */
 export function formatDate(date: Date): string {
   return date.toISOString().split("T")[0];
-}
-
-/**
- * Parse PKR amount to paise (PKR * 100)
- */
-export function parseToPane(pkr: number): number {
-  return Math.round(pkr * 100);
-}
-
-/**
- * Convert paise to PKR
- */
-export function paiseToKR(paise: number): number {
-  return paise / 100;
 }
