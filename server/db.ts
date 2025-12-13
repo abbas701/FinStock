@@ -5,6 +5,10 @@ import { InsertUser, users, stocks, transactions, watchlist, stockAggregates, St
 import { ENV } from './_core/env';
 import Decimal from "decimal.js";
 
+// Precision constants for decimal values
+const SHARE_PRECISION = 8; // Precision for share quantities and avgCost
+const CURRENCY_PRECISION = 2; // Precision for currency amounts (PKR)
+
 let _db: ReturnType<typeof drizzle> | null = null;
 let _client: ReturnType<typeof postgres> | null = null;
 
@@ -212,18 +216,24 @@ export async function addTransaction(
   // Format date to YYYY-MM-DD for PostgreSQL
   const dateStr = date.toISOString().split("T")[0];
 
-  // Insert transaction
-  await db.insert(transactions).values({
-    stockId,
-    type,
-    date: dateStr,
-    quantity: quantity || null,
-    totalAmount,
-    notes: notes || null,
-  });
+  try {
+    // Insert transaction
+    await db.insert(transactions).values({
+      stockId,
+      type,
+      date: dateStr,
+      quantity: quantity || null,
+      totalAmount,
+      notes: notes || null,
+    });
 
-  // Recompute aggregates
-  await recomputeAggregates(stockId);
+    // Recompute aggregates
+    await recomputeAggregates(stockId);
+  } catch (error) {
+    console.error(`[DB] Failed to add transaction for stockId ${stockId}:`, error);
+    console.error(`[DB] Transaction details: type=${type}, date=${dateStr}, quantity=${quantity}, amount=${totalAmount}`);
+    throw new Error(`Failed to add transaction: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 export async function updateTransaction(
@@ -240,32 +250,42 @@ export async function updateTransaction(
   // Format date to YYYY-MM-DD for PostgreSQL
   const dateStr = date.toISOString().split("T")[0];
 
-  const txn = await db.select().from(transactions).where(eq(transactions.id, id)).limit(1);
-  if (!txn || txn.length === 0) throw new Error("Transaction not found");
+  try {
+    const txn = await db.select().from(transactions).where(eq(transactions.id, id)).limit(1);
+    if (!txn || txn.length === 0) throw new Error("Transaction not found");
 
-  const stockId = txn[0].stockId;
+    const stockId = txn[0].stockId;
 
-  await db.update(transactions)
-    .set({ type, date: dateStr, quantity: quantity || null, totalAmount, notes: notes || null, updatedAt: new Date() })
-    .where(eq(transactions.id, id));
+    await db.update(transactions)
+      .set({ type, date: dateStr, quantity: quantity || null, totalAmount, notes: notes || null, updatedAt: new Date() })
+      .where(eq(transactions.id, id));
 
-  // Recompute aggregates
-  await recomputeAggregates(stockId);
+    // Recompute aggregates
+    await recomputeAggregates(stockId);
+  } catch (error) {
+    console.error(`[DB] Failed to update transaction ${id}:`, error);
+    throw new Error(`Failed to update transaction: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 export async function deleteTransaction(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const txn = await db.select().from(transactions).where(eq(transactions.id, id)).limit(1);
-  if (!txn || txn.length === 0) throw new Error("Transaction not found");
+  try {
+    const txn = await db.select().from(transactions).where(eq(transactions.id, id)).limit(1);
+    if (!txn || txn.length === 0) throw new Error("Transaction not found");
 
-  const stockId = txn[0].stockId;
+    const stockId = txn[0].stockId;
 
-  await db.delete(transactions).where(eq(transactions.id, id));
+    await db.delete(transactions).where(eq(transactions.id, id));
 
-  // Recompute aggregates
-  await recomputeAggregates(stockId);
+    // Recompute aggregates
+    await recomputeAggregates(stockId);
+  } catch (error) {
+    console.error(`[DB] Failed to delete transaction ${id}:`, error);
+    throw new Error(`Failed to delete transaction: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 /**
@@ -307,29 +327,39 @@ export async function recomputeAggregates(stockId: number) {
     .where(eq(stockAggregates.stockId, stockId))
     .limit(1);
 
-  if (existingAggregate.length === 0) {
-    // Create aggregate if it doesn't exist
-    console.log(`[DB] Creating new aggregate for stockId ${stockId}`);
-    await db.insert(stockAggregates).values({
-      stockId,
-      totalShares: state.totalShares.toString(),
-      totalInvested: state.totalInvested.toString(),
-      avgCost: state.avgCost.toString(),
-      realizedProfit: state.realizedProfit.toString(),
-    });
-  } else {
-    // Update existing aggregate
-    console.log(`[DB] Updating existing aggregate for stockId ${stockId}`);
-    await db
-      .update(stockAggregates)
-      .set({
-        totalShares: state.totalShares.toString(),
-        totalInvested: state.totalInvested.toString(),
-        avgCost: state.avgCost.toString(),
-        realizedProfit: state.realizedProfit.toString(),
-        updatedAt: new Date(),
-      })
-      .where(eq(stockAggregates.stockId, stockId));
+  // Prepare values for database update with appropriate precision
+  const aggregateValues = {
+    totalShares: state.totalShares.toFixed(SHARE_PRECISION),
+    totalInvested: state.totalInvested.toFixed(CURRENCY_PRECISION),
+    avgCost: state.avgCost.toFixed(SHARE_PRECISION),
+    realizedProfit: state.realizedProfit.toFixed(CURRENCY_PRECISION),
+  };
+
+  console.log(`[DB] Prepared aggregate values for stockId ${stockId}:`, aggregateValues);
+
+  try {
+    if (existingAggregate.length === 0) {
+      // Create aggregate if it doesn't exist
+      console.log(`[DB] Creating new aggregate for stockId ${stockId}`);
+      await db.insert(stockAggregates).values({
+        stockId,
+        ...aggregateValues,
+      });
+    } else {
+      // Update existing aggregate
+      console.log(`[DB] Updating existing aggregate for stockId ${stockId}`);
+      await db
+        .update(stockAggregates)
+        .set({
+          ...aggregateValues,
+          updatedAt: new Date(),
+        })
+        .where(eq(stockAggregates.stockId, stockId));
+    }
+  } catch (error) {
+    console.error(`[DB] Failed to update stockAggregates for stockId ${stockId}:`, error);
+    console.error(`[DB] Attempted values:`, aggregateValues);
+    throw new Error(`Failed to update stock aggregates: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
