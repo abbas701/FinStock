@@ -1,22 +1,27 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Plus, TrendingUp, BarChart3, Eye, Database } from "lucide-react";
+import { LayoutDashboard, Plus, TrendingUp, BarChart3, Eye, Database, Upload, FileSearch, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/contexts/ThemeContext";
+import { Button } from "@/components/ui/button";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Stocks", href: "/stocks", icon: Database },
   { name: "Transactions", href: "/entry", icon: Plus },
+  { name: "Import", href: "/import", icon: Upload },
+  { name: "Audit", href: "/audit", icon: FileSearch },
   { name: "Watchlist", href: "/watchlist", icon: Eye },
   { name: "Reports", href: "/reports", icon: BarChart3 },
 ];
 
 export default function Navigation() {
   const [location] = useLocation();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <nav className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
+        <div className="flex justify-between items-center h-16">
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
               <Link href="/">
@@ -46,6 +51,21 @@ export default function Navigation() {
               })}
             </div>
           </div>
+          {toggleTheme && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              className="text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+              aria-label="Toggle theme"
+            >
+              {theme === "light" ? (
+                <Moon className="h-5 w-5" />
+              ) : (
+                <Sun className="h-5 w-5" />
+              )}
+            </Button>
+          )}
         </div>
       </div>
 

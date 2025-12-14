@@ -6,7 +6,8 @@ import { ENV } from './_core/env';
 import Decimal from "decimal.js";
 
 // Precision constants for decimal values
-const SHARE_PRECISION = 8; // Precision for share quantities and avgCost
+const AVG_COST_PRECISION = 4; // Precision for share quantities and avgCost
+const SHARE_PRECISION = 2; // Precision for share quantities and avgCost
 const CURRENCY_PRECISION = 2; // Precision for currency amounts (PKR)
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -329,10 +330,10 @@ export async function recomputeAggregates(stockId: number) {
 
   // Prepare values for database update with appropriate precision
   const aggregateValues = {
-    totalShares: state.totalShares.toFixed(SHARE_PRECISION),
-    totalInvested: state.totalInvested.toFixed(CURRENCY_PRECISION),
-    avgCost: state.avgCost.toFixed(SHARE_PRECISION),
-    realizedProfit: state.realizedProfit.toFixed(CURRENCY_PRECISION),
+    totalShares: state.totalShares.toFixed(0),
+    totalInvested: state.totalInvested.toFixed(2),
+    avgCost: state.avgCost.toFixed(4),
+    realizedProfit: state.realizedProfit.toFixed(4),
   };
 
   console.log(`[DB] Prepared aggregate values for stockId ${stockId}:`, aggregateValues);

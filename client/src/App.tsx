@@ -11,6 +11,8 @@ import Entry from "./pages/Entry";
 import StockDetail from "./pages/StockDetail";
 import Watchlist from "./pages/Watchlist";
 import Reports from "./pages/Reports";
+import Import from "./pages/Import";
+import TransactionAudit from "./pages/TransactionAudit";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -20,6 +22,8 @@ function Router() {
       <Route path="/stocks" component={Stocks} />
       <Route path="/entry" component={Entry} />
       <Route path="/stock/:id" component={StockDetail} />
+      <Route path="/import" component={Import} />
+      <Route path="/audit" component={TransactionAudit} />
       <Route path="/watchlist" component={Watchlist} />
       <Route path="/reports" component={Reports} />
       <Route path="/404" component={NotFound} />
@@ -39,10 +43,10 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider
         defaultTheme="light"
-        // switchable
+        switchable
       >
         <TooltipProvider>
-          <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+          <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
             <Navigation />
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <Router />

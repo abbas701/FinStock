@@ -51,6 +51,7 @@ export default function Home() {
     }
 
     // Apply sorting
+    console.log(filtered);
     filtered = [...filtered].sort((a, b) => {
       let aValue: number | string;
       let bValue: number | string;
@@ -107,7 +108,7 @@ export default function Home() {
   }, [stocks, searchQuery, sortField, sortOrder, filterHoldings]);
 
   // Calculate totals - MUST be before any conditional returns
-  const totalInvested = stocks?.reduce((sum, s) => sum + (s.totalInvested || 0), 0) || 0;
+  const totalInvested = stocks?.reduce((sum, s) => { console.log(s.name, sum, s.totalInvested); return sum + (s.totalInvested || 0); }, 0) || 0;
   const totalUnrealized = stocks?.reduce((sum, s) => sum + (s.unrealizedProfit || 0), 0) || 0;
   const totalRealized = stocks?.reduce((sum, s) => sum + (s.realizedProfit || 0), 0) || 0;
   // Calculate total market value from current prices
@@ -182,12 +183,12 @@ export default function Home() {
               <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
                 Total Invested
               </CardTitle>
-              <DollarSign className="w-5 h-5 text-gray-400" />
+              <span className="text-gray-400 dark:text-gray-500">PKR</span>
             </div>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-              {formatCurrency(totalInvested)}
+              {formatCurrency(totalInvested - totalRealized)}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Capital deployed</p>
           </CardContent>
@@ -199,7 +200,7 @@ export default function Home() {
               <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
                 Current Value
               </CardTitle>
-              <PieChart className="w-5 h-5 text-gray-400" />
+              <PieChart className="w-5 h-5 text-gray-400 dark:text-gray-500" />
             </div>
           </CardHeader>
           <CardContent>
@@ -217,9 +218,9 @@ export default function Home() {
                 Realized Profit
               </CardTitle>
               {totalRealized >= 0 ? (
-                <ArrowUpRight className="w-5 h-5 text-green-600" />
+                <ArrowUpRight className="w-5 h-5 text-green-600 dark:text-green-400" />
               ) : (
-                <ArrowDownRight className="w-5 h-5 text-red-600" />
+                <ArrowDownRight className="w-5 h-5 text-red-600 dark:text-red-400" />
               )}
             </div>
           </CardHeader>
@@ -243,9 +244,9 @@ export default function Home() {
                 Total Gain/Loss
               </CardTitle>
               {overallGainLoss >= 0 ? (
-                <TrendingUp className="w-5 h-5 text-green-600" />
+                <TrendingUp className="w-5 h-5 text-green-600 dark:text-green-400" />
               ) : (
-                <TrendingDown className="w-5 h-5 text-red-600" />
+                <TrendingDown className="w-5 h-5 text-red-600 dark:text-red-400" />
               )}
             </div>
           </CardHeader>
@@ -285,7 +286,7 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               {/* Search */}
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
                 <Input
                   placeholder="Search by symbol or company name..."
                   value={searchQuery}
@@ -353,7 +354,7 @@ export default function Home() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              <Loader2 className="w-6 h-6 animate-spin text-gray-400 dark:text-gray-500" />
             </div>
           ) : error ? (
             <div className="text-center py-12 text-red-600 dark:text-red-400">
