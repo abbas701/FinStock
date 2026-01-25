@@ -13,19 +13,52 @@ import Watchlist from "./pages/Watchlist";
 import Reports from "./pages/Reports";
 import Import from "./pages/Import";
 import TransactionAudit from "./pages/TransactionAudit";
+import LoginPage from "./pages/auth/LoginPage";
+import SignupPage from "./pages/auth/SignupPage";
+import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/stocks" component={Stocks} />
-      <Route path="/entry" component={Entry} />
-      <Route path="/stock/:id" component={StockDetail} />
-      <Route path="/import" component={Import} />
-      <Route path="/audit" component={TransactionAudit} />
-      <Route path="/watchlist" component={Watchlist} />
-      <Route path="/reports" component={Reports} />
+      <Route path="/login" component={LoginPage} />
+      <Route path="/signup" component={SignupPage} />
+      <Route path="/forgot-password" component={ForgotPasswordPage} />
+      <Route path="/reset-password" component={ResetPasswordPage} />
+
+      <Route path="/">
+        <ProtectedRoute component={Home} />
+      </Route>
+      <Route path="/stocks">
+        <ProtectedRoute component={Stocks} />
+      </Route>
+      <Route path="/entry">
+        <ProtectedRoute component={Entry} />
+      </Route>
+      <Route path="/stock/:id" component={StockDetail} /> {/* Handles ID internally? Or need wrapper? wouter passes params to component. ProtectedRoute needs to handle props or we wrap differently. */}
+      {/* ProtectedRoute as designed above takes `component` prop. It doesn't pass route params automatically if not checking. 
+          To support route params with ProtectedRoute, we can modify ProtectedRoute to render children or pass props.
+          Let's adjust ProtectedRoute usage.
+       */}
+
+      <Route path="/stock/:id">
+        <ProtectedRoute component={StockDetail} />
+      </Route>
+
+      <Route path="/import">
+        <ProtectedRoute component={Import} />
+      </Route>
+      <Route path="/audit">
+        <ProtectedRoute component={TransactionAudit} />
+      </Route>
+      <Route path="/watchlist">
+        <ProtectedRoute component={Watchlist} />
+      </Route>
+      <Route path="/reports">
+        <ProtectedRoute component={Reports} />
+      </Route>
+
       <Route path="/404" component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

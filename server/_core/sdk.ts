@@ -7,6 +7,7 @@ import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import * as db from "../db";
 import { ENV } from "./env";
+import bcrypt from "bcrypt";
 import type {
   ExchangeTokenRequest,
   ExchangeTokenResponse,
@@ -14,12 +15,14 @@ import type {
   GetUserInfoWithJwtRequest,
   GetUserInfoWithJwtResponse,
 } from "./types/manusTypes";
+
 // Utility function
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
 export type SessionPayload = {
-  openId: string;
+  openId?: string; // Optional now
+  userId?: number; // Added userId
   appId: string;
   name: string;
 };
@@ -89,6 +92,8 @@ class SDKServer {
     this.client = client;
     this.oauthService = new OAuthService(this.client);
   }
+
+  // ... (keeping existing methods) ...
 
   private deriveLoginMethod(
     platforms: unknown,
@@ -164,17 +169,21 @@ class SDKServer {
    * const sessionToken = await sdk.createSessionToken(userInfo.openId);
    */
   async createSessionToken(
-    openId: string,
-    options: { expiresInMs?: number; name?: string } = {}
+    identifier: string | number, // openId or userId
+    options: { expiresInMs?: number; name?: string, type?: 'userId' | 'openId' } = {}
   ): Promise<string> {
-    return this.signSession(
-      {
-        openId,
-        appId: ENV.appId,
-        name: options.name || "",
-      },
-      options
-    );
+    const payload: SessionPayload = {
+      appId: ENV.appId,
+      name: options.name || "",
+    };
+
+    if (typeof identifier === 'number' || options.type === 'userId') {
+      payload.userId = Number(identifier);
+    } else {
+      payload.openId = String(identifier);
+    }
+
+    return this.signSession(payload, options);
   }
 
   async signSession(
@@ -187,7 +196,8 @@ class SDKServer {
     const secretKey = this.getSessionSecret();
 
     return new SignJWT({
-      openId: payload.openId,
+      ...(payload.openId ? { openId: payload.openId } : {}),
+      ...(payload.userId ? { userId: payload.userId } : {}),
       appId: payload.appId,
       name: payload.name,
     })
@@ -198,7 +208,7 @@ class SDKServer {
 
   async verifySession(
     cookieValue: string | undefined | null
-  ): Promise<{ openId: string; appId: string; name: string } | null> {
+  ): Promise<SessionPayload | null> {
     if (!cookieValue) {
       // console.warn("[Auth] Missing session cookie");
       return null;
@@ -209,21 +219,22 @@ class SDKServer {
       const { payload } = await jwtVerify(cookieValue, secretKey, {
         algorithms: ["HS256"],
       });
-      const { openId, appId, name } = payload as Record<string, unknown>;
+      const { openId, appId, name, userId } = payload as Record<string, unknown>;
 
       if (
-        !isNonEmptyString(openId) ||
-        !isNonEmptyString(appId) ||
-        !isNonEmptyString(name)
+        (!isNonEmptyString(openId) && typeof userId !== 'number')
+        // appId is optional for local app
+        // name is optional
       ) {
         console.warn("[Auth] Session payload missing required fields");
         return null;
       }
 
       return {
-        openId,
-        appId,
-        name,
+        openId: openId as string,
+        userId: userId as number,
+        appId: appId as string,
+        name: name as string,
       };
     } catch (error) {
       console.warn("[Auth] Session verification failed", String(error));
@@ -259,18 +270,29 @@ class SDKServer {
     // Regular authentication flow
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);
+
+    console.log("[Auth Debug] Cookies received:", req.headers.cookie);
+    console.log("[Auth Debug] Session cookie:", sessionCookie);
+
     const session = await this.verifySession(sessionCookie);
 
     if (!session) {
+      console.log("[Auth Debug] Session verification failed or no session");
       throw ForbiddenError("Invalid session cookie");
     }
 
-    const sessionUserId = session.openId;
-    const signedInAt = new Date();
-    let user = await db.getUserByOpenId(sessionUserId);
+    console.log("[Auth Debug] Session verified for user:", session.userId || session.openId);
 
-    // If user not in DB, sync from OAuth server automatically
-    if (!user) {
+    let user: User | undefined;
+
+    if (session.userId) {
+      user = await db.getUserById(session.userId);
+    } else if (session.openId) {
+      user = await db.getUserByOpenId(session.openId);
+    }
+
+    // (OAuth Sync Logic kept for backward compatibility if openId exists)
+    if (!user && session.openId) {
       try {
         const userInfo = await this.getUserInfoWithJwt(sessionCookie ?? "");
         await db.upsertUser({
@@ -278,25 +300,38 @@ class SDKServer {
           name: userInfo.name || null,
           email: userInfo.email ?? null,
           loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
-          lastSignedIn: signedInAt,
+          lastSignedIn: new Date(),
         });
         user = await db.getUserByOpenId(userInfo.openId);
       } catch (error) {
         console.error("[Auth] Failed to sync user from OAuth:", error);
-        throw ForbiddenError("Failed to sync user info");
+        // Don't throw here, might be a local user
       }
     }
 
     if (!user) {
+      // console.log("[Auth Debug] User not found for session");
       throw ForbiddenError("User not found");
     }
 
     await db.upsertUser({
-      openId: user.openId,
-      lastSignedIn: signedInAt,
+      openId: user.openId ?? undefined, // Only update if openId exists
+      id: user.id, // Or update by ID
+      lastSignedIn: new Date(),
     });
 
     return user;
+  }
+
+  // Password Utility Methods
+
+  async hashPassword(password: string): Promise<string> {
+    const saltRounds = 10;
+    return bcrypt.hash(password, saltRounds);
+  }
+
+  async comparePassword(password: string, hash: string): Promise<boolean> {
+    return bcrypt.compare(password, hash);
   }
 }
 

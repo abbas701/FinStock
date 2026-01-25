@@ -7,8 +7,8 @@ export const watchlistRouter = router({
   /**
    * Get watchlist
    */
-  list: protectedProcedure.query(async () => {
-    const items = await getWatchlist();
+  list: protectedProcedure.query(async ({ ctx }) => {
+    const items = await getWatchlist(ctx.user.id);
 
     const result = await Promise.all(
       items.map(async (item) => {
@@ -42,8 +42,8 @@ export const watchlistRouter = router({
    */
   add: protectedProcedure
     .input(z.object({ stockId: z.number() }))
-    .mutation(async ({ input }) => {
-      await addToWatchlist(input.stockId);
+    .mutation(async ({ input, ctx }) => {
+      await addToWatchlist(ctx.user.id, input.stockId);
       return { message: "Added to watchlist" };
     }),
 
@@ -52,8 +52,8 @@ export const watchlistRouter = router({
    */
   remove: protectedProcedure
     .input(z.object({ watchlistId: z.number() }))
-    .mutation(async ({ input }) => {
-      await removeFromWatchlist(input.watchlistId);
+    .mutation(async ({ input, ctx }) => {
+      await removeFromWatchlist(ctx.user.id, input.watchlistId);
       return { message: "Removed from watchlist" };
     }),
 });

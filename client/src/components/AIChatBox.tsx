@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Loader2, Send, User, Sparkles } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Streamdown } from "streamdown";
+import "./AIChatBox.css";
 
 /**
  * Message type matching server-side LLM Message interface
@@ -191,10 +192,10 @@ export function AIChatBox({
     <div
       ref={containerRef}
       className={cn(
-        "flex flex-col bg-card text-card-foreground rounded-lg border shadow-sm",
+        "flex flex-col bg-card text-card-foreground rounded-lg border shadow-sm ai-chatbox-container",
         className
       )}
-      style={{ height }}
+      style={{ "--chatbox-height": height } as React.CSSProperties}
     >
       {/* Messages Area */}
       <div ref={scrollAreaRef} className="flex-1 overflow-hidden">
@@ -238,11 +239,12 @@ export function AIChatBox({
                       "flex gap-3",
                       message.role === "user"
                         ? "justify-end items-start"
-                        : "justify-start items-start"
+                        : "justify-start items-start",
+                      shouldApplyMinHeight && "chat-message-min-height"
                     )}
                     style={
                       shouldApplyMinHeight
-                        ? { minHeight: `${minHeightForLastMessage}px` }
+                        ? ({ "--chat-min-height": `${minHeightForLastMessage}px` } as React.CSSProperties)
                         : undefined
                     }
                   >
@@ -282,10 +284,13 @@ export function AIChatBox({
 
               {isLoading && (
                 <div
-                  className="flex items-start gap-3"
+                  className={cn(
+                    "flex items-start gap-3",
+                    minHeightForLastMessage > 0 && "chat-message-min-height"
+                  )}
                   style={
                     minHeightForLastMessage > 0
-                      ? { minHeight: `${minHeightForLastMessage}px` }
+                      ? ({ "--chat-min-height": `${minHeightForLastMessage}px` } as React.CSSProperties)
                       : undefined
                   }
                 >

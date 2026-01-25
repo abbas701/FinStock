@@ -12,7 +12,7 @@ export const reportsRouter = router({
    */
   daywise: protectedProcedure
     .input(z.object({ from: z.date(), to: z.date(), stockId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) return [];
 
@@ -23,6 +23,7 @@ export const reportsRouter = router({
         .where(
           and(
             lte(transactions.date, input.to.toISOString().split("T")[0]),
+            eq(transactions.userId, ctx.user.id), // Authenticated user
             input.stockId ? eq(transactions.stockId, input.stockId) : undefined
           )
         )
@@ -110,7 +111,7 @@ export const reportsRouter = router({
    */
   stockPerformance: protectedProcedure
     .input(z.object({ stockIds: z.array(z.number()).optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) return [];
 
@@ -125,7 +126,13 @@ export const reportsRouter = router({
           realizedProfit: stockAggregates.realizedProfit,
         })
         .from(stocks)
-        .leftJoin(stockAggregates, eq(stocks.id, stockAggregates.stockId));
+        .leftJoin(
+          stockAggregates,
+          and(
+            eq(stocks.id, stockAggregates.stockId),
+            eq(stockAggregates.userId, ctx.user.id)
+          )
+        );
 
       if (input.stockIds && input.stockIds.length > 0) {
         query = query.where(inArray(stocks.id, input.stockIds)) as any;
@@ -149,7 +156,7 @@ export const reportsRouter = router({
    */
   transactionVolume: protectedProcedure
     .input(z.object({ from: z.date(), to: z.date(), type: z.enum(["BUY", "SELL", "DIVIDEND"]).optional(), stockId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) return [];
 
@@ -167,6 +174,7 @@ export const reportsRouter = router({
           and(
             gte(transactions.date, input.from.toISOString().split("T")[0]),
             lte(transactions.date, input.to.toISOString().split("T")[0]),
+            eq(transactions.userId, ctx.user.id),
             input.type ? eq(transactions.type, input.type) : undefined,
             input.stockId ? eq(transactions.stockId, input.stockId) : undefined
           )
@@ -185,7 +193,7 @@ export const reportsRouter = router({
   /**
    * Get portfolio distribution
    */
-  portfolioDistribution: protectedProcedure.query(async () => {
+  portfolioDistribution: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
 
@@ -198,7 +206,13 @@ export const reportsRouter = router({
         totalShares: stockAggregates.totalShares,
       })
       .from(stocks)
-      .leftJoin(stockAggregates, eq(stocks.id, stockAggregates.stockId))
+      .leftJoin(
+        stockAggregates,
+        and(
+          eq(stocks.id, stockAggregates.stockId),
+          eq(stockAggregates.userId, ctx.user.id)
+        )
+      )
       .where(sql`${stockAggregates.totalShares}::numeric > 0`);
 
     return result.map((r) => ({

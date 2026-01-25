@@ -9,10 +9,17 @@ export const importRouter = router({
    */
   excel: protectedProcedure
     .input(z.object({ fileData: z.string(), filename: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      if (!ctx.user) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "You must be logged in to import data",
+        });
+      }
+
       try {
         const fileBuffer = Buffer.from(input.fileData, "base64");
-        const result = await importExcelFile(fileBuffer, input.filename);
+        const result = await importExcelFile(ctx.user.id, fileBuffer, input.filename);
         return result;
       } catch (error: any) {
         throw new TRPCError({

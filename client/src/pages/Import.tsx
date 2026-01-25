@@ -92,7 +92,7 @@ export default function Import() {
       <div>
         <h1 className="text-3xl font-bold">Import Excel Data</h1>
         <p className="text-muted-foreground mt-2">
-          Upload an Excel file with your portfolio data. Each sheet should represent a stock symbol.
+          Upload an Excel file with your portfolio data. Organize all transactions in a single sheet with a 'Stock' or 'Symbol' column.
         </p>
       </div>
 
@@ -100,8 +100,9 @@ export default function Import() {
         <CardHeader>
           <CardTitle>Upload Excel File</CardTitle>
           <CardDescription>
-            Select an Excel file (.xlsx or .xls) with transaction data. The "Home" sheet will be ignored.
-            Each sheet should contain columns: Date, Type (Buy/Sell), Quantity, Price per Share, Total Cost.
+            Select an Excel file (.xlsx or .xls) with transaction data.
+            The file should contain a sheet with the following columns: Stock (Symbol), Date, Quantity, Total Amount.
+            Negative quantity value indicates a SELL transaction. Positive is a BUY.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

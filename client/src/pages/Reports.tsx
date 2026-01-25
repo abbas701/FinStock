@@ -14,16 +14,27 @@ import { ResponsivePie } from "@nivo/pie";
 import { ResponsiveScatterPlot } from "@nivo/scatterplot";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertCircle } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
 
 type ChartType = "daywise" | "performance" | "volume" | "distribution";
 
 export default function Reports() {
+  const now = new Date();
   const { user } = useAuth();
-  const [fromDate, setFromDate] = useState(formatDate(new Date(new Date().setFullYear(new Date().getFullYear() - 1))));
+  const { theme } = useTheme();
+  const [fromDate, setFromDate] = useState(formatDate(new Date(now.getFullYear(), now.getMonth(), 1)));
   const [toDate, setToDate] = useState(formatDate(new Date()));
   const [selectedChart, setSelectedChart] = useState<ChartType>("daywise");
   const [selectedStockId, setSelectedStockId] = useState<number | undefined>(undefined);
   const [selectedType, setSelectedType] = useState<"BUY" | "SELL" | "DIVIDEND" | undefined>(undefined);
+
+  // Theme-aware colors
+  const isDark = theme === "dark";
+  const textColor = isDark ? "#e5e7eb" : "#374151";
+  const axisColor = isDark ? "#9ca3af" : "#6b7280";
+  const gridColor = isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)";
+  const legendTextColor = isDark ? "#d1d5db" : "#4b5563";
+  const cardBg = isDark ? "#1f2937" : "#ffffff";
 
   const { data: stocks } = trpc.stock.list.useQuery(undefined, { enabled: !!user });
   const { data: daywiseData, isLoading: daywiseLoading } = trpc.reports.daywise.useQuery(
@@ -112,15 +123,15 @@ export default function Reports() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold">Reports & Analytics</h1>
-        <p className="text-muted-foreground">Visualize and analyze your portfolio performance</p>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Reports & Analytics</h1>
+        <p className="text-muted-foreground dark:text-gray-400">Visualize and analyze your portfolio performance</p>
       </div>
 
       {/* Filters */}
-      <Card>
+      <Card className="border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         <CardHeader>
-          <CardTitle>Filters & Chart Selection</CardTitle>
-          <CardDescription>Select chart type and apply filters to analyze your data</CardDescription>
+          <CardTitle className="text-gray-900 dark:text-gray-100">Filters & Chart Selection</CardTitle>
+          <CardDescription className="text-gray-600 dark:text-gray-400">Select chart type and apply filters to analyze your data</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -206,15 +217,15 @@ export default function Reports() {
       </Card>
 
       {/* Charts */}
-      <Card>
+      <Card className="border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         <CardHeader>
-          <CardTitle>
+          <CardTitle className="text-gray-900 dark:text-gray-100">
             {selectedChart === "daywise" && "Daywise Profit Trend"}
             {selectedChart === "performance" && "Stock Performance Comparison"}
             {selectedChart === "volume" && "Transaction Volume Over Time"}
             {selectedChart === "distribution" && "Portfolio Distribution"}
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-gray-600 dark:text-gray-400">
             {selectedChart === "daywise" && "Daily realized profit/loss over the selected period"}
             {selectedChart === "performance" && "Compare investment and returns across stocks"}
             {selectedChart === "volume" && "Transaction volume by type over time"}
@@ -238,6 +249,16 @@ export default function Reports() {
                     min: "auto",
                     max: "auto",
                   }}
+                  theme={{
+                    text: { fill: textColor, fontSize: 12 },
+                    axis: {
+                      domain: { line: { stroke: axisColor, strokeWidth: 1 } },
+                      ticks: { line: { stroke: axisColor, strokeWidth: 1 }, text: { fill: textColor } },
+                      legend: { text: { fill: textColor } },
+                    },
+                    grid: { line: { stroke: gridColor, strokeWidth: 1 } },
+                  }}
+                  colors={isDark ? ["#60a5fa"] : ["#2563eb"]}
                   axisTop={null}
                   axisRight={null}
                   axisBottom={{
@@ -258,7 +279,7 @@ export default function Reports() {
                     format: (value) => formatCurrency(value),
                   }}
                   pointSize={8}
-                  pointColor={{ theme: "background" }}
+                  pointColor={cardBg}
                   pointBorderWidth={2}
                   pointBorderColor={{ from: "serieColor" }}
                   pointLabelYOffset={-12}
@@ -277,12 +298,13 @@ export default function Reports() {
                       itemOpacity: 0.75,
                       symbolSize: 12,
                       symbolShape: "circle",
-                      symbolBorderColor: "rgba(0, 0, 0, .5)",
+                      symbolBorderColor: isDark ? "rgba(255, 255, 255, 0.5)" : "rgba(0, 0, 0, .5)",
+                      itemTextColor: legendTextColor,
                       effects: [
                         {
                           on: "hover",
                           style: {
-                            itemBackground: "rgba(0, 0, 0, .03)",
+                            itemBackground: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, .03)",
                             itemOpacity: 1,
                           },
                         },
@@ -301,7 +323,16 @@ export default function Reports() {
                   padding={0.3}
                   valueScale={{ type: "linear" }}
                   indexScale={{ type: "band", round: true }}
-                  colors={{ scheme: "nivo" }}
+                  colors={isDark ? ["#60a5fa"] : ["#2563eb"]}
+                  theme={{
+                    text: { fill: textColor, fontSize: 12 },
+                    axis: {
+                      domain: { line: { stroke: axisColor, strokeWidth: 1 } },
+                      ticks: { line: { stroke: axisColor, strokeWidth: 1 }, text: { fill: textColor } },
+                      legend: { text: { fill: textColor } },
+                    },
+                    grid: { line: { stroke: gridColor, strokeWidth: 1 } },
+                  }}
                   axisTop={null}
                   axisRight={null}
                   axisBottom={{
@@ -323,7 +354,7 @@ export default function Reports() {
                   }}
                   labelSkipWidth={12}
                   labelSkipHeight={12}
-                  labelTextColor={{ from: "color", modifiers: [["darker", 1.6]] }}
+                  labelTextColor={isDark ? "#e5e7eb" : "#1f2937"}
                   legends={[
                     {
                       dataFrom: "keys",
@@ -338,6 +369,7 @@ export default function Reports() {
                       itemDirection: "left-to-right",
                       itemOpacity: 0.85,
                       symbolSize: 20,
+                      itemTextColor: legendTextColor,
                       effects: [
                         {
                           on: "hover",
@@ -362,7 +394,16 @@ export default function Reports() {
                   padding={0.3}
                   valueScale={{ type: "linear" }}
                   indexScale={{ type: "band", round: true }}
-                  colors={{ scheme: "set3" }}
+                  colors={isDark ? ["#34d399", "#f87171", "#fbbf24"] : ["#10b981", "#ef4444", "#f59e0b"]}
+                  theme={{
+                    text: { fill: textColor, fontSize: 12 },
+                    axis: {
+                      domain: { line: { stroke: axisColor, strokeWidth: 1 } },
+                      ticks: { line: { stroke: axisColor, strokeWidth: 1 }, text: { fill: textColor } },
+                      legend: { text: { fill: textColor } },
+                    },
+                    grid: { line: { stroke: gridColor, strokeWidth: 1 } },
+                  }}
                   axisTop={null}
                   axisRight={null}
                   axisBottom={{
@@ -384,6 +425,7 @@ export default function Reports() {
                   }}
                   labelSkipWidth={12}
                   labelSkipHeight={12}
+                  labelTextColor={isDark ? "#e5e7eb" : "#1f2937"}
                   legends={[
                     {
                       dataFrom: "keys",
@@ -398,6 +440,7 @@ export default function Reports() {
                       itemDirection: "left-to-right",
                       itemOpacity: 0.85,
                       symbolSize: 20,
+                      itemTextColor: legendTextColor,
                       effects: [
                         {
                           on: "hover",
@@ -421,21 +464,21 @@ export default function Reports() {
                   padAngle={0.7}
                   cornerRadius={3}
                   activeOuterRadiusOffset={8}
-                  colors={{ scheme: "nivo" }}
+                  colors={isDark
+                    ? ["#60a5fa", "#34d399", "#f87171", "#fbbf24", "#a78bfa", "#fb7185", "#38bdf8", "#f472b6"]
+                    : ["#2563eb", "#10b981", "#ef4444", "#f59e0b", "#8b5cf6", "#ec4899", "#0ea5e9", "#f43f5e"]
+                  }
                   borderWidth={1}
                   borderColor={{
                     from: "color",
-                    modifiers: [["darker", 0.2]],
+                    modifiers: [["darker", isDark ? 0.3 : 0.2]],
                   }}
                   arcLinkLabelsSkipAngle={10}
-                  arcLinkLabelsTextColor="#333333"
+                  arcLinkLabelsTextColor={textColor}
                   arcLinkLabelsThickness={2}
                   arcLinkLabelsColor={{ from: "color" }}
                   arcLabelsSkipAngle={10}
-                  arcLabelsTextColor={{
-                    from: "color",
-                    modifiers: [["darker", 2]],
-                  }}
+                  arcLabelsTextColor={isDark ? "#ffffff" : "#000000"}
                   legends={[
                     {
                       anchor: "bottom",
@@ -446,7 +489,7 @@ export default function Reports() {
                       itemsSpacing: 0,
                       itemWidth: 100,
                       itemHeight: 18,
-                      itemTextColor: "#999",
+                      itemTextColor: legendTextColor,
                       itemDirection: "left-to-right",
                       itemOpacity: 1,
                       symbolSize: 18,
@@ -455,7 +498,7 @@ export default function Reports() {
                         {
                           on: "hover",
                           style: {
-                            itemTextColor: "#000",
+                            itemTextColor: textColor,
                           },
                         },
                       ],
@@ -479,16 +522,18 @@ export default function Reports() {
 
       {/* Summary Stats */}
       {selectedChart === "daywise" && daywiseData && (
-        <Card>
+        <Card className="border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
           <CardHeader>
-            <CardTitle>Summary Statistics</CardTitle>
+            <CardTitle className="text-gray-900 dark:text-gray-100">Summary Statistics</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Total Profit</p>
                 <p
-                  className={`text-2xl font-bold ${(daywiseData.reduce((sum, d) => sum + d.profit, 0) >= 0 ? "text-green-600" : "text-red-600")
+                  className={`text-2xl font-bold ${(daywiseData.reduce((sum, d) => sum + d.profit, 0) >= 0
+                    ? "text-green-600 dark:text-green-400"
+                    : "text-red-600 dark:text-red-400")
                     }`}
                 >
                   {formatCurrency(daywiseData.reduce((sum, d) => sum + d.profit, 0))}
@@ -496,14 +541,14 @@ export default function Reports() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Days with Profit</p>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                   {daywiseData.filter((d) => d.profit > 0).length}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Days with Loss</p>
                 <div className="flex items-center gap-2">
-                  <p className="text-2xl font-bold text-red-600">
+                  <p className="text-2xl font-bold text-red-600 dark:text-red-400">
                     {daywiseData.filter((d) => d.profit < 0).length}
                   </p>
                   {daywiseData.some((d) => d.profit < 0 && d.losses && d.losses.length > 0) && (
@@ -526,10 +571,10 @@ export default function Reports() {
                             .map((day, idx) => (
                               <div key={idx} className="border rounded-lg p-4">
                                 <div className="flex items-center justify-between mb-3">
-                                  <h3 className="font-semibold text-red-600">
+                                  <h3 className="font-semibold text-red-600 dark:text-red-400">
                                     {formatDate(new Date(day.date))}
                                   </h3>
-                                  <p className="text-red-600 font-bold">
+                                  <p className="text-red-600 dark:text-red-400 font-bold">
                                     Total Loss: {formatCurrency(day.profit)}
                                   </p>
                                 </div>
@@ -562,7 +607,7 @@ export default function Reports() {
                                         </div>
                                         <div className="col-span-2">
                                           <p className="text-muted-foreground">Loss</p>
-                                          <p className="font-bold text-red-600">
+                                          <p className="font-bold text-red-600 dark:text-red-400">
                                             {formatCurrency(Math.abs(loss.loss))}
                                           </p>
                                         </div>

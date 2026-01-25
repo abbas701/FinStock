@@ -1,6 +1,6 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
-import { addTransaction, updateTransaction, deleteTransaction, recomputeAggregates, recomputeAllAggregates } from "../db";
+import { addTransaction, updateTransaction, deleteTransaction, recomputeAggregates, getTransactionsByStockId } from "../db";
 import { eq, and, gte, lte, sql, desc, asc, inArray, or, like } from "drizzle-orm";
 import { getDb } from "../db";
 import { transactions, stocks, stockAggregates } from "../../drizzle/schema";
@@ -22,8 +22,9 @@ export const transactionRouter = router({
         confirmOverride: z.boolean().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       await addTransaction(
+        ctx.user.id,
         input.stockId,
         input.type,
         input.date,
@@ -49,8 +50,9 @@ export const transactionRouter = router({
         notes: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       await updateTransaction(
+        ctx.user.id,
         input.id,
         input.type,
         input.date,
@@ -67,8 +69,8 @@ export const transactionRouter = router({
    */
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
-      await deleteTransaction(input.id);
+    .mutation(async ({ input, ctx }) => {
+      await deleteTransaction(ctx.user.id, input.id);
       return { message: "Transaction deleted" };
     }),
 
@@ -77,16 +79,16 @@ export const transactionRouter = router({
    */
   recomputeAggregates: protectedProcedure
     .input(z.object({ stockId: z.number() }))
-    .mutation(async ({ input }) => {
-      await recomputeAggregates(input.stockId);
+    .mutation(async ({ input, ctx }) => {
+      await recomputeAggregates(ctx.user.id, input.stockId);
       return { message: "Aggregates recomputed" };
     }),
 
   /**
-   * Recompute aggregates for all stocks
+   * Recompute aggregates for all stocks (Disabled)
    */
   recomputeAllAggregates: protectedProcedure.mutation(async () => {
-    return await recomputeAllAggregates();
+    return { message: "Global recompute disabled" };
   }),
 
   /**
@@ -101,7 +103,7 @@ export const transactionRouter = router({
         type: z.enum(["BUY", "SELL", "DIVIDEND"]).optional(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) return [];
 
@@ -121,9 +123,15 @@ export const transactionRouter = router({
         })
         .from(transactions)
         .leftJoin(stocks, eq(transactions.stockId, stocks.id))
+        .where(eq(transactions.userId, ctx.user.id)) // Scope by user
         .orderBy(desc(transactions.date), desc(transactions.createdAt));
 
-      const conditions = [];
+      // Append filters logic...
+      // Since I can't chain `.where` easily on existing query object without careful typing, 
+      // I will reconstruct basic query logic or filter in memory? No, filter in DB.
+
+      const conditions = [eq(transactions.userId, ctx.user.id)];
+
       if (input.stockId) {
         conditions.push(eq(transactions.stockId, input.stockId));
       }
@@ -140,9 +148,25 @@ export const transactionRouter = router({
         );
       }
 
-      if (conditions.length > 0) {
-        query = query.where(and(...conditions)) as any;
-      }
+      // Re-query with conditions
+      query = db
+        .select({
+          id: transactions.id,
+          stockId: transactions.stockId,
+          type: transactions.type,
+          date: transactions.date,
+          quantity: transactions.quantity,
+          totalAmount: transactions.totalAmount,
+          unitPrice: transactions.unitPrice,
+          notes: transactions.notes,
+          createdAt: transactions.createdAt,
+          stockSymbol: stocks.symbol,
+          stockName: stocks.name,
+        })
+        .from(transactions)
+        .leftJoin(stocks, eq(transactions.stockId, stocks.id))
+        .where(and(...conditions))
+        .orderBy(desc(transactions.date), desc(transactions.createdAt)) as any;
 
       const allTransactions = await query;
 

@@ -22,12 +22,12 @@ export const stockRouter = router({
   /**
    * List all stocks with aggregates
    */
-  list: protectedProcedure.query(async () => {
+  list: protectedProcedure.query(async ({ ctx }) => {
     const stocks = await getAllStocks();
 
     return await Promise.all(
       stocks.map(async (stock) => {
-        const aggregate = await getStockAggregates(stock.id);
+        const aggregate = await getStockAggregates(ctx.user.id, stock.id);
         let currentPrice = 0;
 
         try {
@@ -72,14 +72,14 @@ export const stockRouter = router({
    */
   getDetail: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const stock = await getStockById(input.id);
       if (!stock) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Stock not found" });
       }
 
-      const aggregate = await getStockAggregates(input.id);
-      const { transactions } = await getTransactionsByStockId(input.id);
+      const aggregate = await getStockAggregates(ctx.user.id, input.id);
+      const { transactions } = await getTransactionsByStockId(ctx.user.id, input.id);
 
       let currentPrice = 0;
       try {

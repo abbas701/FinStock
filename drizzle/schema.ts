@@ -1,4 +1,4 @@
-import { integer, pgEnum, pgTable, text, timestamp, varchar, decimal, date, serial } from "drizzle-orm/pg-core";
+import { integer, pgEnum, pgTable, text, timestamp, varchar, decimal, date, serial, boolean } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 /**
@@ -15,9 +15,10 @@ export const users = pgTable("users", {
    */
   id: serial("id").primaryKey(),
   /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+  openId: varchar("openId", { length: 64 }).unique(), // Made nullable/optional logic-wise if using pure password, but keeping unique
+  password: text("password"), // Hashed password
   name: text("name"),
-  email: varchar("email", { length: 320 }),
+  email: varchar("email", { length: 320 }).unique(), // Email is now crucial for login
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: roleEnum("role").default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -30,7 +31,7 @@ export type InsertUser = typeof users.$inferInsert;
 
 /**
  * Stock table: stores stock symbols and names.
- * Single-user design: no userId column required.
+ * Global table, shared across users.
  */
 export const stocks = pgTable("stocks", {
   id: serial("id").primaryKey(),
@@ -51,6 +52,7 @@ export const transactionTypeEnum = pgEnum("transaction_type", ["BUY", "SELL", "D
 
 export const transactions = pgTable("transactions", {
   id: serial("id").primaryKey(),
+  userId: integer("userId").references(() => users.id).notNull(),
   stockId: integer("stockId").notNull(),
   type: transactionTypeEnum("type").notNull(),
   date: date("date").notNull(),
@@ -70,6 +72,7 @@ export type InsertTransaction = typeof transactions.$inferInsert;
  */
 export const watchlist = pgTable("watchlist", {
   id: serial("id").primaryKey(),
+  userId: integer("userId").references(() => users.id).notNull(),
   stockId: integer("stockId").notNull(),
   addedAt: timestamp("addedAt").defaultNow().notNull(),
 });
@@ -80,10 +83,12 @@ export type InsertWatchlist = typeof watchlist.$inferInsert;
 /**
  * Stock aggregates: cached aggregates for performance.
  * Recomputed when transactions are added/edited/deleted.
+ * Now scoped by USER.
  */
 export const stockAggregates = pgTable("stockAggregates", {
   id: serial("id").primaryKey(),
-  stockId: integer("stockId").notNull().unique(),
+  userId: integer("userId").references(() => users.id).notNull(),
+  stockId: integer("stockId").notNull(),
   totalShares: decimal("totalShares", { precision: 18, scale: 8 }).notNull().default("0"),
   totalInvested: decimal("totalInvested", { precision: 18, scale: 2 }).notNull().default("0"), // in PKR
   avgCost: decimal("avgCost", { precision: 18, scale: 8 }).notNull().default("0"), // in PKR per share
@@ -95,6 +100,12 @@ export type StockAggregate = typeof stockAggregates.$inferSelect;
 export type InsertStockAggregate = typeof stockAggregates.$inferInsert;
 
 // Relations
+export const usersRelations = relations(users, ({ many }) => ({
+  transactions: many(transactions),
+  watchlistEntries: many(watchlist),
+  aggregates: many(stockAggregates),
+}));
+
 export const stocksRelations = relations(stocks, ({ many }) => ({
   transactions: many(transactions),
   watchlistEntries: many(watchlist),
@@ -102,6 +113,10 @@ export const stocksRelations = relations(stocks, ({ many }) => ({
 }));
 
 export const transactionsRelations = relations(transactions, ({ one }) => ({
+  user: one(users, {
+    fields: [transactions.userId],
+    references: [users.id],
+  }),
   stock: one(stocks, {
     fields: [transactions.stockId],
     references: [stocks.id],
@@ -109,6 +124,10 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
 }));
 
 export const watchlistRelations = relations(watchlist, ({ one }) => ({
+  user: one(users, {
+    fields: [watchlist.userId],
+    references: [users.id],
+  }),
   stock: one(stocks, {
     fields: [watchlist.stockId],
     references: [stocks.id],
@@ -116,8 +135,30 @@ export const watchlistRelations = relations(watchlist, ({ one }) => ({
 }));
 
 export const stockAggregatesRelations = relations(stockAggregates, ({ one }) => ({
+  user: one(users, {
+    fields: [stockAggregates.userId],
+    references: [users.id],
+  }),
   stock: one(stocks, {
     fields: [stockAggregates.stockId],
     references: [stocks.id],
+  }),
+}));
+
+/**
+ * Password Reset Tokens table
+ */
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").references(() => users.id).notNull(),
+  token: varchar("token", { length: 255 }).notNull().unique(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
+  user: one(users, {
+    fields: [passwordResetTokens.userId],
+    references: [users.id],
   }),
 }));

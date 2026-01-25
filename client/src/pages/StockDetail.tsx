@@ -219,9 +219,9 @@ export default function StockDetail() {
                       </TableCell>
                       <TableCell className="text-right">
                         {txn.quantity ? parseFloat(txn.quantity).toFixed(2) : "-"}
-                      </TableCell>
+                      </TableCell>  
                       <TableCell className="text-right">
-                        {txn.unitPrice ? formatCurrency(parseFloat(txn.unitPrice)) : "-"}
+                        {txn.unitPrice ? formatCurrency(parseFloat(txn.unitPrice)) : txn.quantity ? formatCurrency(parseFloat(txn.totalAmount) / parseFloat(txn.quantity)) : "-"}
                       </TableCell>
                       <TableCell className="text-right">{formatCurrency(parseFloat(txn.totalAmount))}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{txn.notes || "-"}</TableCell>
