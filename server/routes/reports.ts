@@ -37,6 +37,9 @@ export const reportsRouter = router({
       }> = {};
       const profitByDate: Record<string, { profit: number; losses: any[] }> = {};
 
+      // Track same-day buys for intraday trading logic per stock
+      const sameDayBuysByStock: Record<number, { date: string; buys: Array<{ quantity: Decimal; unitPrice: Decimal }> }> = {};
+
       for (const txn of allTxns) {
         if (!stockStates[txn.stockId]) {
           stockStates[txn.stockId] = {
@@ -50,10 +53,37 @@ export const reportsRouter = router({
         const date = txn.date.toString();
         const isInRange = txn.date >= input.from.toISOString().split("T")[0] && txn.date <= input.to.toISOString().split("T")[0];
 
+        // Reset same-day tracking when date changes for this stock
+        if (!sameDayBuysByStock[txn.stockId] || sameDayBuysByStock[txn.stockId].date !== date) {
+          sameDayBuysByStock[txn.stockId] = { date, buys: [] };
+        }
+
+        const sameDayBuys = sameDayBuysByStock[txn.stockId].buys;
+
         if (txn.type === "SELL" && txn.quantity && isInRange) {
           const qty = new Decimal(txn.quantity.toString());
           const proceeds = new Decimal(txn.totalAmount.toString());
-          const costBasis = state.avgCost.times(qty);
+
+          // Calculate cost basis using same-day buy logic (FIFO)
+          let remainingToSell = qty;
+          let costBasis = new Decimal(0);
+
+          // Match with same-day buys first
+          for (let i = 0; i < sameDayBuys.length && remainingToSell.greaterThan(0); i++) {
+            const buy = sameDayBuys[i];
+            if (buy.quantity.greaterThan(0)) {
+              const qtyToMatch = Decimal.min(buy.quantity, remainingToSell);
+              costBasis = costBasis.plus(qtyToMatch.times(buy.unitPrice));
+              buy.quantity = buy.quantity.minus(qtyToMatch);
+              remainingToSell = remainingToSell.minus(qtyToMatch);
+            }
+          }
+
+          // If there are still shares to sell, use the average cost
+          if (remainingToSell.greaterThan(0)) {
+            costBasis = costBasis.plus(state.avgCost.times(remainingToSell));
+          }
+
           const profit = proceeds.minus(costBasis);
           const profitValue = parseFloat(profit.toString());
 
@@ -89,7 +119,7 @@ export const reportsRouter = router({
           avgCost: state.avgCost,
           realizedProfit: new Decimal(0),
         };
-        const newState = processTransaction(currentState, txn);
+        const newState = processTransaction(currentState, txn, sameDayBuys);
         stockStates[txn.stockId] = {
           totalShares: newState.totalShares,
           totalInvested: newState.totalInvested,

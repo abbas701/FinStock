@@ -292,8 +292,18 @@ export async function recomputeAggregates(userId: number, stockId: number) {
     realizedProfit: new Decimal(0),
   };
 
+  // Track same-day purchases for intraday trading logic
+  let currentDate = "";
+  let sameDayBuys: Array<{ quantity: Decimal; unitPrice: Decimal }> = [];
+
   for (const txn of txns) {
-    state = processTransaction(state, txn);
+    // Reset same-day tracking when date changes
+    if (txn.date !== currentDate) {
+      currentDate = txn.date;
+      sameDayBuys = [];
+    }
+
+    state = processTransaction(state, txn, sameDayBuys);
   }
 
   const existingAggregate = await db
@@ -338,7 +348,8 @@ export function processTransaction(
     avgCost: Decimal;
     realizedProfit: Decimal;
   },
-  txn: Transaction
+  txn: Transaction,
+  sameDayBuys: Array<{ quantity: Decimal; unitPrice: Decimal }> = []
 ) {
   const quantity = txn.quantity ? new Decimal(txn.quantity) : new Decimal(0);
   const totalAmount = new Decimal(txn.totalAmount);
@@ -346,22 +357,39 @@ export function processTransaction(
   if (txn.type === "BUY") {
     const newTotalShares = state.totalShares.plus(quantity);
     const newTotalInvested = state.totalInvested.plus(totalAmount);
-    // If total shares is zero or negative (shorting?), handle gracefully. 
-    // Assuming long-only for now, but protecting against div by zero
     const newAvgCost = newTotalShares.isZero() ? new Decimal(0) : newTotalInvested.dividedBy(newTotalShares);
+
+    // Track this buy for potential same-day selling
+    const unitPrice = quantity.isZero() ? new Decimal(0) : totalAmount.dividedBy(quantity);
+    sameDayBuys.push({ quantity, unitPrice });
+
     return { ...state, totalShares: newTotalShares, totalInvested: newTotalInvested, avgCost: newAvgCost };
   } else if (txn.type === "SELL") {
-    // FIFO/Weighted Avg logic simplified here as per original code
-    // Assuming sold shares reduce cost basis proportionally to avg cost
-    const sharesToSell = quantity; // .greaterThan(state.totalShares) ... logic might need check? Original didn't enforcing strict long
-    const costRemoved = state.avgCost.times(sharesToSell);
+    const sharesToSell = quantity;
     const proceeds = totalAmount;
-    const realizedProfitThisTxn = proceeds.minus(costRemoved);
+    let remainingToSell = sharesToSell;
+    let costRemoved = new Decimal(0);
 
+    // First, try to match with same-day buys (FIFO)
+    for (let i = 0; i < sameDayBuys.length && remainingToSell.greaterThan(0); i++) {
+      const buy = sameDayBuys[i];
+      if (buy.quantity.greaterThan(0)) {
+        const qtyToMatch = Decimal.min(buy.quantity, remainingToSell);
+        costRemoved = costRemoved.plus(qtyToMatch.times(buy.unitPrice));
+        buy.quantity = buy.quantity.minus(qtyToMatch);
+        remainingToSell = remainingToSell.minus(qtyToMatch);
+      }
+    }
+
+    // If there are still shares to sell, use the average cost for remaining
+    if (remainingToSell.greaterThan(0)) {
+      costRemoved = costRemoved.plus(state.avgCost.times(remainingToSell));
+    }
+
+    const realizedProfitThisTxn = proceeds.minus(costRemoved);
     const newTotalShares = state.totalShares.minus(sharesToSell);
     const newTotalInvested = state.totalInvested.minus(costRemoved);
-    // Avg cost remains same on sell (ideally), unless position cleared
-    const newAvgCost = newTotalShares.isZero() ? new Decimal(0) : state.avgCost; // Keep old avg cost if still holding? No, effectively same.
+    const newAvgCost = newTotalShares.isZero() ? new Decimal(0) : state.avgCost;
 
     return {
       totalShares: newTotalShares,

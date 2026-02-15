@@ -447,7 +447,7 @@ describe("Moving-Average Accounting Logic", () => {
       };
 
       state = processTransaction(state, sell);
-      
+
       // After selling 250 out of 500 shares
       expect(state.totalShares.toString()).toBe("250");
       expect(state.totalInvested.toString()).toBe("25000"); // 250 * 100
@@ -478,12 +478,292 @@ describe("Moving-Average Accounting Logic", () => {
       };
 
       state = processTransaction(state, sell);
-      
+
       // After selling all shares
       expect(state.totalShares.toString()).toBe("0");
       expect(state.totalInvested.toString()).toBe("0");
       expect(state.avgCost.toString()).toBe("0");
       expect(state.realizedProfit.toString()).toBe("10000"); // (120 - 100) * 500
+    });
+  });
+
+  /**
+   * Test Case: Intraday Trading - Same Day Buy and Sell
+   */
+  describe("Intraday Trading Logic", () => {
+    it("should use same-day buy price when selling on the same day", () => {
+      let state = {
+        totalShares: new Decimal(0),
+        totalInvested: new Decimal(0),
+        avgCost: new Decimal(0),
+        realizedProfit: new Decimal(0),
+      };
+
+      const sameDayBuys: Array<{ quantity: Decimal; unitPrice: Decimal }> = [];
+
+      // BUY 100 shares at 50 PKR on Day 1
+      const buy: Transaction = {
+        id: 1,
+        stockId: 1,
+        type: "BUY",
+        date: "2024-01-01",
+        quantity: "100",
+        totalAmount: "5000",
+        unitPrice: "50",
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      state = processTransaction(state, buy, sameDayBuys);
+      expect(state.totalShares.toString()).toBe("100");
+      expect(state.avgCost.toString()).toBe("50");
+
+      // SELL 50 shares at 60 PKR on the same day
+      const sell: Transaction = {
+        id: 2,
+        stockId: 1,
+        type: "SELL",
+        date: "2024-01-01",
+        quantity: "50",
+        totalAmount: "3000",
+        unitPrice: "60",
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      state = processTransaction(state, sell, sameDayBuys);
+
+      // Profit should be based on same-day price: (60 - 50) * 50 = 500
+      expect(state.totalShares.toString()).toBe("50");
+      expect(state.realizedProfit.toString()).toBe("500");
+    });
+
+    it("should handle FIFO when multiple same-day buys", () => {
+      let state = {
+        totalShares: new Decimal(0),
+        totalInvested: new Decimal(0),
+        avgCost: new Decimal(0),
+        realizedProfit: new Decimal(0),
+      };
+
+      const sameDayBuys: Array<{ quantity: Decimal; unitPrice: Decimal }> = [];
+
+      // BUY 100 shares at 50 PKR
+      const buy1: Transaction = {
+        id: 1,
+        stockId: 1,
+        type: "BUY",
+        date: "2024-01-01",
+        quantity: "100",
+        totalAmount: "5000",
+        unitPrice: "50",
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      state = processTransaction(state, buy1, sameDayBuys);
+
+      // BUY 50 shares at 60 PKR on the same day
+      const buy2: Transaction = {
+        id: 2,
+        stockId: 1,
+        type: "BUY",
+        date: "2024-01-01",
+        quantity: "50",
+        totalAmount: "3000",
+        unitPrice: "60",
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      state = processTransaction(state, buy2, sameDayBuys);
+
+      // SELL 120 shares at 70 PKR on the same day
+      const sell: Transaction = {
+        id: 3,
+        stockId: 1,
+        type: "SELL",
+        date: "2024-01-01",
+        quantity: "120",
+        totalAmount: "8400",
+        unitPrice: "70",
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      state = processTransaction(state, sell, sameDayBuys);
+
+      // Profit: (70-50)*100 + (70-60)*20 = 2000 + 200 = 2200
+      // Cost basis: 100*50 + 20*60 = 5000 + 1200 = 6200
+      // Proceeds: 120*70 = 8400
+      // Profit: 8400 - 6200 = 2200
+      expect(state.realizedProfit.toString()).toBe("2200");
+    });
+
+    it("should use avg price when selling more than same-day buys", () => {
+      let state = {
+        totalShares: new Decimal(200),
+        totalInvested: new Decimal(9000), // 200 shares at avg cost 45 PKR
+        avgCost: new Decimal(45),
+        realizedProfit: new Decimal(0),
+      };
+
+      const sameDayBuys: Array<{ quantity: Decimal; unitPrice: Decimal }> = [];
+
+      // BUY 100 shares at 50 PKR on Day 2
+      const buy: Transaction = {
+        id: 1,
+        stockId: 1,
+        type: "BUY",
+        date: "2024-01-02",
+        quantity: "100",
+        totalAmount: "5000",
+        unitPrice: "50",
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      state = processTransaction(state, buy, sameDayBuys);
+
+      // Now we have 300 shares, avg cost should be recalculated
+      // (9000 + 5000) / 300 = 46.666...
+      expect(state.totalShares.toString()).toBe("300");
+      expect(new Decimal(state.avgCost).toDecimalPlaces(2).toString()).toBe("46.67");
+
+      // SELL 150 shares at 60 PKR on the same day
+      const sell: Transaction = {
+        id: 2,
+        stockId: 1,
+        type: "SELL",
+        date: "2024-01-02",
+        quantity: "150",
+        totalAmount: "9000",
+        unitPrice: "60",
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      state = processTransaction(state, sell, sameDayBuys);
+
+      // Cost basis: 100*50 (same-day) + 50*46.67 (avg) = 5000 + 2333.5 = 7333.5
+      // Proceeds: 150*60 = 9000
+      // Profit: 9000 - 7333.5 = 1666.5
+      const expectedProfit = new Decimal(9000).minus(new Decimal(5000)).minus(new Decimal(46.67).times(50));
+      expect(new Decimal(state.realizedProfit).toDecimalPlaces(0).toString()).toBe(expectedProfit.toDecimalPlaces(0).toString());
+    });
+
+    it("should not apply same-day logic to different days", () => {
+      let state = {
+        totalShares: new Decimal(0),
+        totalInvested: new Decimal(0),
+        avgCost: new Decimal(0),
+        realizedProfit: new Decimal(0),
+      };
+
+      let sameDayBuys: Array<{ quantity: Decimal; unitPrice: Decimal }> = [];
+
+      // BUY 100 shares at 50 PKR on Day 1
+      const buy: Transaction = {
+        id: 1,
+        stockId: 1,
+        type: "BUY",
+        date: "2024-01-01",
+        quantity: "100",
+        totalAmount: "5000",
+        unitPrice: "50",
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      state = processTransaction(state, buy, sameDayBuys);
+
+      // Reset same-day buys for a new day
+      sameDayBuys = [];
+
+      // SELL 50 shares at 60 PKR on Day 2 (different day)
+      const sell: Transaction = {
+        id: 2,
+        stockId: 1,
+        type: "SELL",
+        date: "2024-01-02",
+        quantity: "50",
+        totalAmount: "3000",
+        unitPrice: "60",
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      state = processTransaction(state, sell, sameDayBuys);
+
+      // Should use avg price (50), not same-day price
+      // Profit: (60 - 50) * 50 = 500
+      expect(state.realizedProfit.toString()).toBe("500");
+    });
+
+    it("should handle sell before buy on the same day", () => {
+      let state = {
+        totalShares: new Decimal(100),
+        totalInvested: new Decimal(5000),
+        avgCost: new Decimal(50),
+        realizedProfit: new Decimal(0),
+      };
+
+      const sameDayBuys: Array<{ quantity: Decimal; unitPrice: Decimal }> = [];
+
+      // SELL 50 shares at 60 PKR (no same-day buys yet)
+      const sell: Transaction = {
+        id: 1,
+        stockId: 1,
+        type: "SELL",
+        date: "2024-01-01",
+        quantity: "50",
+        totalAmount: "3000",
+        unitPrice: "60",
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      state = processTransaction(state, sell, sameDayBuys);
+
+      // Should use avg price: (60 - 50) * 50 = 500
+      expect(state.realizedProfit.toString()).toBe("500");
+      expect(state.totalShares.toString()).toBe("50");
+
+      // BUY 100 shares at 55 PKR on the same day (after sell)
+      const buy: Transaction = {
+        id: 2,
+        stockId: 1,
+        type: "BUY",
+        date: "2024-01-01",
+        quantity: "100",
+        totalAmount: "5500",
+        unitPrice: "55",
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      state = processTransaction(state, buy, sameDayBuys);
+
+      expect(state.totalShares.toString()).toBe("150");
+
+      // SELL 30 shares at 65 PKR (should use same-day buy price from the earlier buy)
+      const sell2: Transaction = {
+        id: 3,
+        stockId: 1,
+        type: "SELL",
+        date: "2024-01-01",
+        quantity: "30",
+        totalAmount: "1950",
+        unitPrice: "65",
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      state = processTransaction(state, sell2, sameDayBuys);
+
+      // This sell should use same-day price (55): (65 - 55) * 30 = 300
+      // Total profit: 500 + 300 = 800
+      expect(state.realizedProfit.toString()).toBe("800");
     });
   });
 });

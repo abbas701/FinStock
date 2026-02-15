@@ -479,31 +479,6 @@ export default function Reports() {
                   arcLinkLabelsColor={{ from: "color" }}
                   arcLabelsSkipAngle={10}
                   arcLabelsTextColor={isDark ? "#ffffff" : "#000000"}
-                  legends={[
-                    {
-                      anchor: "bottom",
-                      direction: "row",
-                      justify: false,
-                      translateX: 0,
-                      translateY: 56,
-                      itemsSpacing: 0,
-                      itemWidth: 100,
-                      itemHeight: 18,
-                      itemTextColor: legendTextColor,
-                      itemDirection: "left-to-right",
-                      itemOpacity: 1,
-                      symbolSize: 18,
-                      symbolShape: "circle",
-                      effects: [
-                        {
-                          on: "hover",
-                          style: {
-                            itemTextColor: textColor,
-                          },
-                        },
-                      ],
-                    },
-                  ]}
                 />
               )}
 
