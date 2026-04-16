@@ -193,6 +193,23 @@ export async function getTransactionsByStockId(userId: number, stockId: number, 
   return { transactions: result, total };
 }
 
+function computeUnitPrice(
+  type: "BUY" | "SELL" | "DIVIDEND",
+  quantity: string | null,
+  totalAmount: string
+) {
+  if (type === "DIVIDEND" || !quantity) {
+    return null;
+  }
+
+  const qty = new Decimal(quantity);
+  if (qty.isZero()) {
+    return null;
+  }
+
+  return new Decimal(totalAmount).dividedBy(qty).toFixed(8);
+}
+
 export async function addTransaction(
   userId: number,
   stockId: number,
@@ -206,6 +223,7 @@ export async function addTransaction(
   if (!db) throw new Error("Database not available");
 
   const dateStr = date.toISOString().split("T")[0];
+  const unitPrice = computeUnitPrice(type, quantity, totalAmount);
 
   try {
     await db.insert(transactions).values({
@@ -215,6 +233,7 @@ export async function addTransaction(
       date: dateStr,
       quantity: quantity || null,
       totalAmount,
+      unitPrice,
       notes: notes || null,
     });
 
@@ -238,6 +257,7 @@ export async function updateTransaction(
   if (!db) throw new Error("Database not available");
 
   const dateStr = date.toISOString().split("T")[0];
+  const unitPrice = computeUnitPrice(type, quantity, totalAmount);
 
   try {
     const txn = await db.select().from(transactions).where(and(eq(transactions.id, id), eq(transactions.userId, userId))).limit(1);
@@ -246,7 +266,7 @@ export async function updateTransaction(
     const stockId = txn[0].stockId;
 
     await db.update(transactions)
-      .set({ type, date: dateStr, quantity: quantity || null, totalAmount, notes: notes || null, updatedAt: new Date() })
+      .set({ type, date: dateStr, quantity: quantity || null, totalAmount, unitPrice, notes: notes || null, updatedAt: new Date() })
       .where(eq(transactions.id, id));
 
     await recomputeAggregates(userId, stockId);
@@ -360,7 +380,11 @@ export function processTransaction(
     const newAvgCost = newTotalShares.isZero() ? new Decimal(0) : newTotalInvested.dividedBy(newTotalShares);
 
     // Track this buy for potential same-day selling
-    const unitPrice = quantity.isZero() ? new Decimal(0) : totalAmount.dividedBy(quantity);
+    const unitPrice = txn.unitPrice
+      ? new Decimal(txn.unitPrice)
+      : quantity.isZero()
+        ? new Decimal(0)
+        : totalAmount.dividedBy(quantity);
     sameDayBuys.push({ quantity, unitPrice });
 
     return { ...state, totalShares: newTotalShares, totalInvested: newTotalInvested, avgCost: newAvgCost };

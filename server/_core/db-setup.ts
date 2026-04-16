@@ -41,7 +41,9 @@ export async function ensureTablesExist() {
         "role" "role" DEFAULT 'user' NOT NULL,
         "createdAt" timestamp DEFAULT now() NOT NULL,
         "updatedAt" timestamp DEFAULT now() NOT NULL,
-        "lastSignedIn" timestamp DEFAULT now() NOT NULL
+        "lastSignedIn" timestamp DEFAULT now() NOT NULL,
+        CONSTRAINT "users_openId_unique" UNIQUE("openId"),
+        CONSTRAINT "users_email_unique" UNIQUE("email")
       );
     `);
 
@@ -50,7 +52,8 @@ export async function ensureTablesExist() {
         "id" serial PRIMARY KEY NOT NULL,
         "symbol" varchar(10) NOT NULL,
         "name" varchar(255) NOT NULL,
-        "createdAt" timestamp DEFAULT now() NOT NULL
+        "createdAt" timestamp DEFAULT now() NOT NULL,
+        CONSTRAINT "stocks_symbol_unique" UNIQUE("symbol")
       );
     `);
 
@@ -66,7 +69,9 @@ export async function ensureTablesExist() {
         "unitPrice" numeric(18, 8),
         "notes" text,
         "createdAt" timestamp DEFAULT now() NOT NULL,
-        "updatedAt" timestamp DEFAULT now() NOT NULL
+        "updatedAt" timestamp DEFAULT now() NOT NULL,
+        CONSTRAINT "transactions_userId_fk" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE,
+        CONSTRAINT "transactions_stockId_fk" FOREIGN KEY ("stockId") REFERENCES "stocks"("id") ON DELETE CASCADE
       );
     `);
 
@@ -79,7 +84,10 @@ export async function ensureTablesExist() {
         "totalInvested" numeric(18, 2) DEFAULT 0 NOT NULL,
         "avgCost" numeric(18, 8) DEFAULT '0' NOT NULL,
         "realizedProfit" numeric(18, 2) DEFAULT 0 NOT NULL,
-        "updatedAt" timestamp DEFAULT now() NOT NULL
+        "updatedAt" timestamp DEFAULT now() NOT NULL,
+        CONSTRAINT "stockAggregates_user_stock_unique" UNIQUE("userId", "stockId"),
+        CONSTRAINT "stockAggregates_userId_fk" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE,
+        CONSTRAINT "stockAggregates_stockId_fk" FOREIGN KEY ("stockId") REFERENCES "stocks"("id") ON DELETE CASCADE
       );
     `);
 
@@ -88,7 +96,9 @@ export async function ensureTablesExist() {
         "id" serial PRIMARY KEY NOT NULL,
         "userId" integer,
         "stockId" integer NOT NULL,
-        "addedAt" timestamp DEFAULT now() NOT NULL
+        "addedAt" timestamp DEFAULT now() NOT NULL,
+        CONSTRAINT "watchlist_userId_fk" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE,
+        CONSTRAINT "watchlist_stockId_fk" FOREIGN KEY ("stockId") REFERENCES "stocks"("id") ON DELETE CASCADE
       );
     `);
 
@@ -98,101 +108,10 @@ export async function ensureTablesExist() {
         "userId" integer NOT NULL,
         "token" varchar(255) NOT NULL,
         "expiresAt" timestamp NOT NULL,
-        "createdAt" timestamp DEFAULT now() NOT NULL
+        "createdAt" timestamp DEFAULT now() NOT NULL,
+        CONSTRAINT "password_reset_tokens_token_unique" UNIQUE("token"),
+        CONSTRAINT "password_reset_tokens_userId_fk" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE
       );
-    `);
-
-    // Patch existing installs that were created with the older bootstrap script.
-    await client.unsafe(`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "password" text;`);
-    await client.unsafe(`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "email" varchar(320);`);
-    await client.unsafe(`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "loginMethod" varchar(64);`);
-    await client.unsafe(`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "lastSignedIn" timestamp DEFAULT now() NOT NULL;`);
-
-    await client.unsafe(`ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "userId" integer;`);
-    await client.unsafe(`ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "unitPrice" numeric(18, 8);`);
-    await client.unsafe(`ALTER TABLE "stockAggregates" ADD COLUMN IF NOT EXISTS "userId" integer;`);
-    await client.unsafe(`ALTER TABLE "watchlist" ADD COLUMN IF NOT EXISTS "userId" integer;`);
-
-    // Unique constraints/indexes that match schema/import expectations.
-    await client.unsafe(`
-      DO $$ BEGIN
-        ALTER TABLE "users" ADD CONSTRAINT "users_openId_unique" UNIQUE("openId");
-      EXCEPTION
-        WHEN duplicate_table OR duplicate_object THEN null;
-      END $$;
-    `);
-
-    await client.unsafe(`
-      DO $$ BEGIN
-        ALTER TABLE "users" ADD CONSTRAINT "users_email_unique" UNIQUE("email");
-      EXCEPTION
-        WHEN duplicate_table OR duplicate_object THEN null;
-      END $$;
-    `);
-
-    await client.unsafe(`
-      DO $$ BEGIN
-        ALTER TABLE "stocks" ADD CONSTRAINT "stocks_symbol_unique" UNIQUE("symbol");
-      EXCEPTION
-        WHEN duplicate_table OR duplicate_object THEN null;
-      END $$;
-    `);
-
-    await client.unsafe(`
-      DO $$ BEGIN
-        ALTER TABLE "stockAggregates" ADD CONSTRAINT "stockAggregates_user_stock_unique" UNIQUE("userId", "stockId");
-      EXCEPTION
-        WHEN duplicate_table OR duplicate_object THEN null;
-      END $$;
-    `);
-
-    await client.unsafe(`
-      DO $$ BEGIN
-        ALTER TABLE "password_reset_tokens" ADD CONSTRAINT "password_reset_tokens_token_unique" UNIQUE("token");
-      EXCEPTION
-        WHEN duplicate_table OR duplicate_object THEN null;
-      END $$;
-    `);
-
-    // Foreign keys are applied with defensive blocks to avoid crashing if already present.
-    await client.unsafe(`
-      DO $$ BEGIN
-        ALTER TABLE "transactions"
-          ADD CONSTRAINT "transactions_userId_fk"
-          FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE;
-      EXCEPTION
-        WHEN duplicate_object THEN null;
-      END $$;
-    `);
-
-    await client.unsafe(`
-      DO $$ BEGIN
-        ALTER TABLE "stockAggregates"
-          ADD CONSTRAINT "stockAggregates_userId_fk"
-          FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE;
-      EXCEPTION
-        WHEN duplicate_object THEN null;
-      END $$;
-    `);
-
-    await client.unsafe(`
-      DO $$ BEGIN
-        ALTER TABLE "watchlist"
-          ADD CONSTRAINT "watchlist_userId_fk"
-          FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE;
-      EXCEPTION
-        WHEN duplicate_object THEN null;
-      END $$;
-    `);
-
-    await client.unsafe(`
-      DO $$ BEGIN
-        ALTER TABLE "password_reset_tokens"
-          ADD CONSTRAINT "password_reset_tokens_userId_fk"
-          FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE;
-      EXCEPTION
-        WHEN duplicate_object THEN null;
-      END $$;
     `);
 
     console.log("[DB Setup] All tables verified/created successfully");
