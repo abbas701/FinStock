@@ -16,7 +16,7 @@ The Stock Portfolio Tracker implements the **moving-average (average cost) accou
 - **Watchlist**: Monitor stocks you're interested in
 - **Reports**: Daywise profit analysis and performance tracking
 - **Responsive Design**: Mobile-first interface optimized for all devices
-- **Docker Support**: Easy local development and deployment
+- **Simple Node Deployment**: Run as a standard Node.js service
 
 ## Technology Stack
 
@@ -28,7 +28,7 @@ The Stock Portfolio Tracker implements the **moving-average (average cost) accou
 | Accounting | Decimal.js for precise calculations |
 | Charts | Nivo (planned) |
 | Testing | Vitest |
-| Deployment | Docker + Docker Compose |
+| Deployment | Node.js runtime (Vercel/Netlify/other) |
 
 ## Project Structure
 
@@ -48,9 +48,7 @@ stock-portfolio-tracker/
 │   ├── __tests__/            # Unit tests
 │   └── _core/                # Framework plumbing
 ├── drizzle/                  # Database schema and migrations
-├── prisma/                   # Seed script
-├── docker-compose.yml        # Docker Compose configuration
-├── Dockerfile                # Container image definition
+├── scripts/                  # Seed and utility scripts
 └── README.md                 # This file
 ```
 
@@ -59,10 +57,10 @@ stock-portfolio-tracker/
 ### Prerequisites
 
 - **Node.js** 22+ and **pnpm** 10+
-- **PostgreSQL** 14+ (or Docker)
+- **PostgreSQL** 14+
 - **Git**
 
-### Local Development (Without Docker)
+### Local Development
 
 1. **Clone and install dependencies:**
 
@@ -90,7 +88,7 @@ pnpm db:push
 4. **Seed example data (optional):**
 
 ```bash
-pnpm tsx prisma/seed.ts
+pnpm seed
 ```
 
 5. **Start the development server:**
@@ -101,55 +99,22 @@ pnpm dev
 
 The application will be available at `http://localhost:3000`.
 
-### Local Development (With Docker)
-
-1. **Start services with Docker Compose:**
-
-```bash
-docker-compose up -d
-```
-
-2. **Run migrations inside the container:**
-
-```bash
-docker-compose exec app pnpm db:push
-```
-
-3. **Seed example data (optional):**
-
-```bash
-docker-compose exec app pnpm tsx prisma/seed.ts
-```
-
-4. **Access the application:**
-
-Open `http://localhost:3000` in your browser.
-
-### Stopping Docker Services
-
-```bash
-docker-compose down
-```
-
-To remove all data and start fresh:
-
-```bash
-docker-compose down -v
-```
-
 ## Environment Variables
 
 Create a `.env` file in the project root with the following variables:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:password@localhost:5432/stock_portfolio` |
-| `MARKET_API_PROVIDER` | Market data provider (yahoo_unofficial or alpha_vantage) | `yahoo_unofficial` |
+| `DATABASE_URL` | PostgreSQL connection string (Supabase pooler recommended for hosted runtimes) | `postgresql://postgres.<ref>:<password>@<pooler-host>:6543/postgres?sslmode=require` |
+| `COOKIE_SECRET` | Secret used for session signing (required in production) | `long-random-secret` |
+| `APP_BASE_URL` | Public URL of the deployed app (used for reset links) | `https://your-app-domain.com` |
+| `MARKET_API_PROVIDER` | Market data provider (yahoo_finance2 or alpha_vantage) | `yahoo_finance2` |
 | `MARKET_API_KEY` | API key for Alpha Vantage (only if using alpha_vantage) | (optional) |
 | `PORT` | Server port | `3000` |
 | `NODE_ENV` | Environment (development or production) | `development` |
-| `TZ` | Timezone (default: Asia/Karachi for PKT) | `Asia/Karachi` |
-| `NEXT_PUBLIC_CURRENCY` | Currency code | `PKR` |
+| `VITE_APP_TITLE` | Frontend app title override | `Stock Portfolio Tracker` |
+| `VITE_APP_ID` | Frontend app identifier (used with OAuth portal flow) | `stock-portfolio-tracker` |
+| `VITE_OAUTH_PORTAL_URL` | OAuth portal URL (optional) | `https://auth.example.com` |
 
 ## Database Schema
 
@@ -357,31 +322,88 @@ Tests cover:
 
 ## Deployment
 
-### Render.com
+### Can this run fully on Railway (frontend + backend + DB)?
 
-1. Push your code to GitHub
-2. Create a new Web Service on Render
-3. Set the build command: `pnpm install && pnpm build`
-4. Set the start command: `pnpm start`
-5. Add environment variables in Render dashboard
-6. Deploy
+Yes. This repository can run as a single Railway service:
+- Frontend: Vite build output is served by Express in production.
+- Backend: Express + tRPC runs in the same service.
+- Database: Use Supabase Postgres via `DATABASE_URL`.
 
-### Railway.app
+Railway free resources can be enough for development/small personal usage, but free limits can change and may sleep/scale down on inactivity. For reliable uptime, monitor your Railway plan limits.
 
-1. Connect your GitHub repository
-2. Railway will auto-detect Node.js
-3. Add PostgreSQL plugin
-4. Set environment variables
-5. Deploy
+### Railway (Single Service) Deployment
 
-### Vercel (Frontend Only)
+If you want to deploy the whole repo directly to Railway, use this setup:
 
-The frontend can be deployed separately to Vercel:
+1. Create a new Railway project and connect this repository.
+2. Railway will use `railway.json` in this repo:
+	- Build: `pnpm install --frozen-lockfile && pnpm build`
+	- Start: `pnpm start`
+3. Configure environment variables in Railway:
+	- `NODE_ENV=production`
+	- `DATABASE_URL=<supabase-pooler-url-with-sslmode=require>`
+	- `COOKIE_SECRET=<long-random-secret>`
+	- `APP_BASE_URL=https://<your-railway-domain>` (optional if `RAILWAY_PUBLIC_DOMAIN` is available)
+	- `MARKET_API_PROVIDER=yahoo_finance2` (or your provider)
+	- `MARKET_API_KEY` (only if using `alpha_vantage`)
+4. Deploy.
 
-1. Push to GitHub
-2. Import project in Vercel
-3. Set `NEXT_PUBLIC_API_BASE` to your backend URL
-4. Deploy
+For this single-service Railway setup, keep `VITE_API_BASE_URL` empty so the frontend calls same-origin `/api/trpc`.
+
+### Vercel vs Netlify for this codebase
+
+This app currently runs as a single Node/Express runtime (tRPC API + static client served by Express), not as a pure static frontend with separate serverless handlers.
+
+**Vercel - Pros**
+- Better Node.js runtime ergonomics and observability for TypeScript/Express-heavy apps.
+- Strong Git integration and preview deploy workflow.
+- Cleaner DX for projects that may later split frontend and API.
+
+**Vercel - Cons**
+- Serverless model can create more frequent cold starts on low traffic.
+- You must use pooled Postgres connections (Supabase pooler) to avoid connection exhaustion.
+
+**Netlify - Pros**
+- Excellent static frontend hosting and CDN behavior.
+- Good branch previews and simple UI for environment variables.
+
+**Netlify - Cons**
+- This architecture needs more adaptation effort to fit Netlify Functions cleanly.
+- Express-first backends are generally less straightforward than on Vercel.
+
+### Recommendation
+
+Use **Vercel** for this project if your requirement is choosing between Vercel and Netlify while keeping current logic flow intact. It is the lower-friction path for your existing Node + Express + tRPC setup.
+
+### Frontend Deployment on Vercel
+
+If you want to deploy **frontend only** on Vercel, keep backend/API on your server and point the frontend to it.
+
+1. Import the repository in Vercel.
+2. Keep root directory as project root.
+3. Build settings are provided via `vercel.json`:
+	- Install command: `pnpm install --frozen-lockfile`
+	- Build command: `pnpm vite build`
+	- Output directory: `dist/public`
+4. Add environment variables in Vercel project settings:
+	- `VITE_API_BASE_URL=https://your-backend-domain.com`
+	- `VITE_APP_TITLE` (optional)
+	- `VITE_APP_ID` / `VITE_OAUTH_PORTAL_URL` (if OAuth flow is enabled)
+5. Deploy.
+
+The frontend will call `${VITE_API_BASE_URL}/api/trpc` in production. If `VITE_API_BASE_URL` is empty, it falls back to same-origin `/api/trpc`.
+
+### Live configuration with Supabase (recommended baseline)
+
+1. Create a Supabase project.
+2. Copy the **pooler** Postgres URL from Supabase.
+3. Set `DATABASE_URL` to the pooler URL with `sslmode=require`.
+4. Set `COOKIE_SECRET` to a long random value.
+5. Set `APP_BASE_URL` to your deployed HTTPS domain.
+6. Set `NODE_ENV=production`.
+7. Optionally set `MARKET_API_PROVIDER` and `MARKET_API_KEY`.
+
+Use `.env.production.example` as your source-of-truth template for live variables.
 
 ## Troubleshooting
 
@@ -392,7 +414,6 @@ The frontend can be deployed separately to Vercel:
 **Solution:**
 - Ensure PostgreSQL is running
 - Check `DATABASE_URL` in `.env`
-- For Docker: ensure `postgres` service is healthy: `docker-compose ps`
 
 ### Market Price Fetch Failures
 
@@ -461,7 +482,6 @@ For issues, questions, or suggestions, please open an issue on GitHub or contact
 - Real-time market price integration
 - Portfolio dashboard with profit/loss metrics
 - Responsive UI with Tailwind CSS
-- Docker support for easy deployment
 - Comprehensive test suite
 - Production-ready codebase
 

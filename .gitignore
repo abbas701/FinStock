@@ -14,6 +14,9 @@ build/
 .env.test.local
 .env.production.local
 
+#resources
+resources/
+
 # IDE and editor files
 .vscode/
 .idea/
@@ -28,7 +31,7 @@ build/
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-Thumbs.db
+Thumbs.db~
 
 # Logs
 logs
@@ -107,3 +110,6 @@ temp/
 *.sqlite3
 *.xlsx
 *.csv
+
+.vercel
+.env*.local

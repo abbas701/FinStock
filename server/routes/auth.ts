@@ -4,6 +4,7 @@ import { upsertUser, getUserByEmail, getUserByOpenId } from "../db";
 import { sdk } from "../_core/sdk";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { TRPCError } from "@trpc/server";
+import { ENV } from "../_core/env";
 
 export const authRouter = router({
   signup: publicProcedure
@@ -102,8 +103,11 @@ export const authRouter = router({
       if (user) {
         const { createPasswordResetToken } = await import("../auth-utils");
         const token = await createPasswordResetToken(user.id);
+        const appBaseUrl = ENV.appBaseUrl || "http://localhost:3000";
         // In a real app, send email here. For now, log link.
-        console.log(`[Auth] Password reset link for ${input.email}: http://localhost:3000/reset-password?token=${token}`);
+        console.log(
+          `[Auth] Password reset link for ${input.email}: ${appBaseUrl}/reset-password?token=${token}`
+        );
       }
       // Always return success to prevent email enumeration
       return { success: true };
