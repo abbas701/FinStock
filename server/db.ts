@@ -137,16 +137,24 @@ export async function createStock(symbol: string, name: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  await db.insert(stocks).values({ symbol: symbol.toUpperCase(), name }).onConflictDoNothing();
+  const upperSymbol = symbol.toUpperCase();
+  console.log(`[DB] Attempting to create stock: ${upperSymbol} (${name})`);
+
+  await db.insert(stocks).values({ symbol: upperSymbol, name }).onConflictDoNothing();
+  console.log(`[DB] Insert attempted for ${upperSymbol}`);
 
   const newStock = await db.select().from(stocks)
-    .where(eq(stocks.symbol, symbol.toUpperCase()))
+    .where(eq(stocks.symbol, upperSymbol))
     .limit(1);
 
+  console.log(`[DB] SELECT result for ${upperSymbol}:`, newStock?.length, newStock ? newStock[0] : null);
+
   if (!newStock || newStock.length === 0) {
+    console.error(`[DB] Stock ${upperSymbol} not found after insert/select`);
     throw new Error(`Failed to create/find stock: ${symbol}`);
   }
 
+  console.log(`[DB] Successfully created/found stock: ${upperSymbol} with id: ${newStock[0].id}`);
   return newStock[0];
 }
 
