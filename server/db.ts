@@ -140,17 +140,25 @@ export async function createStock(symbol: string, name: string) {
   const upperSymbol = symbol.toUpperCase();
   console.log(`[DB] Attempting to create stock: ${upperSymbol} (${name})`);
 
-  await db.insert(stocks).values({ symbol: upperSymbol, name }).onConflictDoNothing();
-  console.log(`[DB] Insert attempted for ${upperSymbol}`);
+  try {
+    const insertResult = await db.insert(stocks).values({ symbol: upperSymbol, name }).onConflictDoNothing();
+    console.log(`[DB] Insert result:`, insertResult);
+  } catch (insertError) {
+    console.error(`[DB] Insert error:`, insertError);
+    throw insertError;
+  }
 
+  console.log(`[DB] About to SELECT ${upperSymbol}...`);
   const newStock = await db.select().from(stocks)
     .where(eq(stocks.symbol, upperSymbol))
     .limit(1);
 
-  console.log(`[DB] SELECT result for ${upperSymbol}:`, newStock?.length, newStock ? newStock[0] : null);
+  console.log(`[DB] SELECT result for ${upperSymbol}: found ${newStock?.length} rows`, newStock && newStock.length > 0 ? newStock[0] : "EMPTY");
 
   if (!newStock || newStock.length === 0) {
-    console.error(`[DB] Stock ${upperSymbol} not found after insert/select`);
+    // Check if it exists with different casing
+    const allStocks = await db.select().from(stocks).limit(5);
+    console.error(`[DB] Failed to find ${upperSymbol}. Sample stocks in DB:`, allStocks);
     throw new Error(`Failed to create/find stock: ${symbol}`);
   }
 
