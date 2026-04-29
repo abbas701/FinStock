@@ -140,9 +140,23 @@ export async function createStock(symbol: string, name: string) {
   const upperSymbol = symbol.toUpperCase();
   console.log(`[DB] Attempting to create stock: ${upperSymbol} (${name})`);
 
+  // First check if it already exists
+  const existingBySymbol = await db.select().from(stocks).where(eq(stocks.symbol, upperSymbol));
+  console.log(`[DB] Existing stock with symbol ${upperSymbol}:`, existingBySymbol.length > 0 ? existingBySymbol[0] : "NONE");
+
+  // Check if name might be causing conflict
+  const existingByName = await db.select().from(stocks).where(eq(stocks.name, name));
+  console.log(`[DB] Existing stock with name "${name}":`, existingByName.length > 0 ? existingByName[0] : "NONE");
+
+  if (existingBySymbol.length > 0) {
+    console.log(`[DB] Stock already exists with symbol ${upperSymbol}`);
+    return existingBySymbol[0];
+  }
+
   try {
+    console.log(`[DB] Executing insert with symbol="${upperSymbol}", name="${name}"`);
     const insertResult = await db.insert(stocks).values({ symbol: upperSymbol, name }).onConflictDoNothing();
-    console.log(`[DB] Insert result:`, insertResult);
+    console.log(`[DB] Insert result:`, JSON.stringify(insertResult));
   } catch (insertError) {
     console.error(`[DB] Insert error:`, insertError);
     throw insertError;
@@ -156,9 +170,10 @@ export async function createStock(symbol: string, name: string) {
   console.log(`[DB] SELECT result for ${upperSymbol}: found ${newStock?.length} rows`, newStock && newStock.length > 0 ? newStock[0] : "EMPTY");
 
   if (!newStock || newStock.length === 0) {
-    // Check if it exists with different casing
-    const allStocks = await db.select().from(stocks).limit(5);
-    console.error(`[DB] Failed to find ${upperSymbol}. Sample stocks in DB:`, allStocks);
+    // Check all stocks to see what we have
+    const allStocks = await db.select().from(stocks);
+    console.error(`[DB] Failed to find ${upperSymbol}. Total stocks in DB: ${allStocks.length}`);
+    console.error(`[DB] All symbols:`, allStocks.map(s => s.symbol).join(", "));
     throw new Error(`Failed to create/find stock: ${symbol}`);
   }
 
