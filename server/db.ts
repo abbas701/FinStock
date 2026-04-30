@@ -138,47 +138,51 @@ export async function createStock(symbol: string, name: string) {
   if (!db) throw new Error("Database not available");
 
   const upperSymbol = symbol.toUpperCase();
-  console.log(`[DB] Attempting to create stock: ${upperSymbol} (${name})`);
-
-  // First check if it already exists
-  const existingBySymbol = await db.select().from(stocks).where(eq(stocks.symbol, upperSymbol));
-  console.log(`[DB] Existing stock with symbol ${upperSymbol}:`, existingBySymbol.length > 0 ? existingBySymbol[0] : "NONE");
-
-  // Check if name might be causing conflict
-  const existingByName = await db.select().from(stocks).where(eq(stocks.name, name));
-  console.log(`[DB] Existing stock with name "${name}":`, existingByName.length > 0 ? existingByName[0] : "NONE");
-
-  if (existingBySymbol.length > 0) {
-    console.log(`[DB] Stock already exists with symbol ${upperSymbol}`);
-    return existingBySymbol[0];
-  }
 
   try {
-    console.log(`[DB] Executing insert with symbol="${upperSymbol}", name="${name}"`);
-    const insertResult = await db.insert(stocks).values({ symbol: upperSymbol, name }).onConflictDoNothing();
-    console.log(`[DB] Insert result:`, JSON.stringify(insertResult));
-  } catch (insertError) {
-    console.error(`[DB] Insert error:`, insertError);
-    throw insertError;
+    // Attempt to insert and return the new row.
+    // Specifying target ensures we only ignore symbol conflicts, exposing other issues like out-of-sync sequences.
+    const [newStock] = await db
+      .insert(stocks)
+      .values({ symbol: upperSymbol, name })
+      .onConflictDoNothing({ target: stocks.symbol })
+      .returning();
+
+    if (newStock) {
+      return newStock;
+    }
+
+    // If no row was returned, it means it already existed and was ignored.
+    const existing = await db
+      .select()
+      .from(stocks)
+      .where(eq(stocks.symbol, upperSymbol))
+      .limit(1);
+
+    if (existing.length > 0) {
+      return existing[0];
+    }
+
+    throw new Error(`Failed to create or find stock: ${symbol}`);
+  } catch (error) {
+    console.error(`[DB] Error creating stock ${upperSymbol}:`, error);
+    
+    // Attempt to fix sequence out of sync automatically if it's a primary key violation
+    if (error instanceof Error && error.message.includes("duplicate key value violates unique constraint") && error.message.includes("pkey")) {
+      console.log(`[DB] Detected out-of-sync sequence. Attempting to fix stocks_id_seq...`);
+      await db.execute(sql`SELECT setval('stocks_id_seq', (SELECT MAX(id) FROM stocks));`);
+      // Retry the insert once
+      const [retryStock] = await db
+        .insert(stocks)
+        .values({ symbol: upperSymbol, name })
+        .onConflictDoNothing({ target: stocks.symbol })
+        .returning();
+        
+      if (retryStock) return retryStock;
+    }
+    
+    throw error;
   }
-
-  console.log(`[DB] About to SELECT ${upperSymbol}...`);
-  const newStock = await db.select().from(stocks)
-    .where(eq(stocks.symbol, upperSymbol))
-    .limit(1);
-
-  console.log(`[DB] SELECT result for ${upperSymbol}: found ${newStock?.length} rows`, newStock && newStock.length > 0 ? newStock[0] : "EMPTY");
-
-  if (!newStock || newStock.length === 0) {
-    // Check all stocks to see what we have
-    const allStocks = await db.select().from(stocks);
-    console.error(`[DB] Failed to find ${upperSymbol}. Total stocks in DB: ${allStocks.length}`);
-    console.error(`[DB] All symbols:`, allStocks.map(s => s.symbol).join(", "));
-    throw new Error(`Failed to create/find stock: ${symbol}`);
-  }
-
-  console.log(`[DB] Successfully created/found stock: ${upperSymbol} with id: ${newStock[0].id}`);
-  return newStock[0];
 }
 
 export async function getStockById(id: number) {
