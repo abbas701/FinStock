@@ -164,21 +164,28 @@ export async function createStock(symbol: string, name: string) {
     }
 
     throw new Error(`Failed to create or find stock: ${symbol}`);
-  } catch (error) {
+  } catch (error: any) {
     console.error(`[DB] Error creating stock ${upperSymbol}:`, error);
     
     // Attempt to fix sequence out of sync automatically if it's a primary key violation
-    if (error instanceof Error && error.message.includes("duplicate key value violates unique constraint") && error.message.includes("pkey")) {
+    // Drizzle wraps Postgres errors, so we check stringified error and cause
+    const errorString = String(error) + (error.cause ? String(error.cause) : "");
+    if (errorString.includes("duplicate key value violates unique constraint") && errorString.includes("pkey")) {
       console.log(`[DB] Detected out-of-sync sequence. Attempting to fix stocks_id_seq...`);
-      await db.execute(sql`SELECT setval('stocks_id_seq', (SELECT MAX(id) FROM stocks));`);
-      // Retry the insert once
-      const [retryStock] = await db
-        .insert(stocks)
-        .values({ symbol: upperSymbol, name })
-        .onConflictDoNothing({ target: stocks.symbol })
-        .returning();
-        
-      if (retryStock) return retryStock;
+      try {
+        await db.execute(sql`SELECT setval('stocks_id_seq', COALESCE((SELECT MAX(id) FROM stocks), 0));`);
+        // Retry the insert once
+        const [retryStock] = await db
+          .insert(stocks)
+          .values({ symbol: upperSymbol, name })
+          .onConflictDoNothing({ target: stocks.symbol })
+          .returning();
+          
+        if (retryStock) return retryStock;
+      } catch (retryError) {
+        console.error(`[DB] Failed to auto-fix sequence and retry:`, retryError);
+        throw retryError;
+      }
     }
     
     throw error;
