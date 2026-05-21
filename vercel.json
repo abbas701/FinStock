@@ -1,0 +1,9 @@
+{
+  "buildCommand": "pnpm run build:vercel",
+  "installCommand": "pnpm install",
+  "outputDirectory": "dist/public",
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "^/(?!api/).*", "dest": "/index.html" }
+  ]
+}
