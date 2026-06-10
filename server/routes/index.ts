@@ -5,6 +5,7 @@ import { watchlistRouter } from "./watchlist";
 import { reportsRouter } from "./reports";
 import { authRouter } from "./auth";
 import { importRouter } from "./import";
+import { settingsRouter } from "./settings";
 
 /**
  * Main App Router
@@ -16,6 +17,7 @@ export const appRouter = router({
   watchlist: watchlistRouter,
   reports: reportsRouter,
   import: importRouter,
+  settings: settingsRouter,
 });
 
 export type AppRouter = typeof appRouter;

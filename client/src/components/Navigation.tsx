@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Plus, TrendingUp, BarChart3, Eye, Database, Upload, FileSearch, Sun, Moon, LogOut, User } from "lucide-react";
+import { LayoutDashboard, Plus, BarChart3, Eye, Database, Upload, FileSearch, Sun, Moon, LogOut, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ const navigation = [
   { name: "Audit", href: "/audit", icon: FileSearch },
   { name: "Watchlist", href: "/watchlist", icon: Eye },
   { name: "Reports", href: "/reports", icon: BarChart3 },
+  { name: "Settings", href: "/settings", icon: Settings },
 ];
 
 export default function Navigation() {

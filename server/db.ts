@@ -1,7 +1,7 @@
 import { eq, desc, asc, sql, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { InsertUser, users, stocks, transactions, watchlist, stockAggregates, passwordResetTokens, Stock, Transaction, StockAggregate } from "../drizzle/schema";
+import { InsertUser, users, stocks, transactions, watchlist, stockAggregates, passwordResetTokens, userSettings, Stock, Transaction, StockAggregate, UserSettings } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import Decimal from "decimal.js";
 
@@ -341,6 +341,9 @@ export async function recomputeAggregates(userId: number, stockId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
+  const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1);
+  const tradingWindowDays = settings?.tradingWindowDays ?? 1;
+
   const txns = await db
     .select()
     .from(transactions)
@@ -354,18 +357,11 @@ export async function recomputeAggregates(userId: number, stockId: number) {
     realizedProfit: new Decimal(0),
   };
 
-  // Track same-day purchases for intraday trading logic
-  let currentDate = "";
-  let sameDayBuys: Array<{ quantity: Decimal; unitPrice: Decimal }> = [];
+  // Track recent purchases for multi-day window trading logic (FIFO, date-tagged)
+  const recentBuys: Array<{ date: string; quantity: Decimal; unitPrice: Decimal }> = [];
 
   for (const txn of txns) {
-    // Reset same-day tracking when date changes
-    if (txn.date !== currentDate) {
-      currentDate = txn.date;
-      sameDayBuys = [];
-    }
-
-    state = processTransaction(state, txn, sameDayBuys);
+    state = processTransaction(state, txn, recentBuys, tradingWindowDays);
   }
 
   const existingAggregate = await db
@@ -403,6 +399,12 @@ export async function recomputeAggregates(userId: number, stockId: number) {
   }
 }
 
+function subtractDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().split("T")[0];
+}
+
 export function processTransaction(
   state: {
     totalShares: Decimal;
@@ -411,7 +413,8 @@ export function processTransaction(
     realizedProfit: Decimal;
   },
   txn: Transaction,
-  sameDayBuys: Array<{ quantity: Decimal; unitPrice: Decimal }> = []
+  recentBuys: Array<{ date: string; quantity: Decimal; unitPrice: Decimal }> = [],
+  tradingWindowDays: number = 1
 ) {
   const quantity = txn.quantity ? new Decimal(txn.quantity) : new Decimal(0);
   const totalAmount = new Decimal(txn.totalAmount);
@@ -421,13 +424,12 @@ export function processTransaction(
     const newTotalInvested = state.totalInvested.plus(totalAmount);
     const newAvgCost = newTotalShares.isZero() ? new Decimal(0) : newTotalInvested.dividedBy(newTotalShares);
 
-    // Track this buy for potential same-day selling
     const unitPrice = txn.unitPrice
       ? new Decimal(txn.unitPrice)
       : quantity.isZero()
         ? new Decimal(0)
         : totalAmount.dividedBy(quantity);
-    sameDayBuys.push({ quantity, unitPrice });
+    recentBuys.push({ date: txn.date, quantity, unitPrice });
 
     return { ...state, totalShares: newTotalShares, totalInvested: newTotalInvested, avgCost: newAvgCost };
   } else if (txn.type === "SELL") {
@@ -436,9 +438,22 @@ export function processTransaction(
     let remainingToSell = sharesToSell;
     let costRemoved = new Decimal(0);
 
-    // First, try to match with same-day buys (FIFO)
-    for (let i = 0; i < sameDayBuys.length && remainingToSell.greaterThan(0); i++) {
-      const buy = sameDayBuys[i];
+    // Cutoff date: buys on or after this date are eligible for FIFO matching
+    const cutoffDate = subtractDays(txn.date, tradingWindowDays - 1);
+
+    // Prune from front: entries that are fully consumed or older than the window
+    while (recentBuys.length > 0) {
+      const oldest = recentBuys[0];
+      if (oldest.quantity.isZero() || oldest.date < cutoffDate) {
+        recentBuys.shift();
+      } else {
+        break;
+      }
+    }
+
+    // FIFO match against buys within the trading window
+    for (let i = 0; i < recentBuys.length && remainingToSell.greaterThan(0); i++) {
+      const buy = recentBuys[i];
       if (buy.quantity.greaterThan(0)) {
         const qtyToMatch = Decimal.min(buy.quantity, remainingToSell);
         costRemoved = costRemoved.plus(qtyToMatch.times(buy.unitPrice));
@@ -447,7 +462,7 @@ export function processTransaction(
       }
     }
 
-    // If there are still shares to sell, use the average cost for remaining
+    // Remaining shares not matched to window buys use the running average cost
     if (remainingToSell.greaterThan(0)) {
       costRemoved = costRemoved.plus(state.avgCost.times(remainingToSell));
     }
@@ -471,6 +486,25 @@ export function processTransaction(
   }
 
   return state;
+}
+
+export async function getUserSettings(userId: number): Promise<UserSettings | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1);
+  return settings ?? null;
+}
+
+export async function upsertUserSettings(userId: number, patch: Partial<Pick<UserSettings, "tradingWindowDays">>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await getUserSettings(userId);
+  if (existing) {
+    await db.update(userSettings).set({ ...patch, updatedAt: new Date() }).where(eq(userSettings.userId, userId));
+  } else {
+    await db.insert(userSettings).values({ userId, tradingWindowDays: patch.tradingWindowDays ?? 1 });
+  }
 }
 
 export async function getStockAggregates(userId: number, stockId: number) {

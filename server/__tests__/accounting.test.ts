@@ -488,9 +488,9 @@ describe("Moving-Average Accounting Logic", () => {
   });
 
   /**
-   * Test Case: Intraday Trading - Same Day Buy and Sell
+   * Test Case: Trading Window Logic (same-day and multi-day)
    */
-  describe("Intraday Trading Logic", () => {
+  describe("Trading Window Logic", () => {
     it("should use same-day buy price when selling on the same day", () => {
       let state = {
         totalShares: new Decimal(0),
@@ -499,7 +499,7 @@ describe("Moving-Average Accounting Logic", () => {
         realizedProfit: new Decimal(0),
       };
 
-      const sameDayBuys: Array<{ quantity: Decimal; unitPrice: Decimal }> = [];
+      const recentBuys: Array<{ date: string; quantity: Decimal; unitPrice: Decimal }> = [];
 
       // BUY 100 shares at 50 PKR on Day 1
       const buy: Transaction = {
@@ -514,7 +514,7 @@ describe("Moving-Average Accounting Logic", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      state = processTransaction(state, buy, sameDayBuys);
+      state = processTransaction(state, buy, recentBuys);
       expect(state.totalShares.toString()).toBe("100");
       expect(state.avgCost.toString()).toBe("50");
 
@@ -531,7 +531,7 @@ describe("Moving-Average Accounting Logic", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      state = processTransaction(state, sell, sameDayBuys);
+      state = processTransaction(state, sell, recentBuys);
 
       // Profit should be based on same-day price: (60 - 50) * 50 = 500
       expect(state.totalShares.toString()).toBe("50");
@@ -546,7 +546,7 @@ describe("Moving-Average Accounting Logic", () => {
         realizedProfit: new Decimal(0),
       };
 
-      const sameDayBuys: Array<{ quantity: Decimal; unitPrice: Decimal }> = [];
+      const recentBuys: Array<{ date: string; quantity: Decimal; unitPrice: Decimal }> = [];
 
       // BUY 100 shares at 50 PKR
       const buy1: Transaction = {
@@ -561,7 +561,7 @@ describe("Moving-Average Accounting Logic", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      state = processTransaction(state, buy1, sameDayBuys);
+      state = processTransaction(state, buy1, recentBuys);
 
       // BUY 50 shares at 60 PKR on the same day
       const buy2: Transaction = {
@@ -576,7 +576,7 @@ describe("Moving-Average Accounting Logic", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      state = processTransaction(state, buy2, sameDayBuys);
+      state = processTransaction(state, buy2, recentBuys);
 
       // SELL 120 shares at 70 PKR on the same day
       const sell: Transaction = {
@@ -591,7 +591,7 @@ describe("Moving-Average Accounting Logic", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      state = processTransaction(state, sell, sameDayBuys);
+      state = processTransaction(state, sell, recentBuys);
 
       // Profit: (70-50)*100 + (70-60)*20 = 2000 + 200 = 2200
       // Cost basis: 100*50 + 20*60 = 5000 + 1200 = 6200
@@ -608,7 +608,7 @@ describe("Moving-Average Accounting Logic", () => {
         realizedProfit: new Decimal(0),
       };
 
-      const sameDayBuys: Array<{ quantity: Decimal; unitPrice: Decimal }> = [];
+      const recentBuys: Array<{ date: string; quantity: Decimal; unitPrice: Decimal }> = [];
 
       // BUY 100 shares at 50 PKR on Day 2
       const buy: Transaction = {
@@ -623,7 +623,7 @@ describe("Moving-Average Accounting Logic", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      state = processTransaction(state, buy, sameDayBuys);
+      state = processTransaction(state, buy, recentBuys);
 
       // Now we have 300 shares, avg cost should be recalculated
       // (9000 + 5000) / 300 = 46.666...
@@ -643,7 +643,7 @@ describe("Moving-Average Accounting Logic", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      state = processTransaction(state, sell, sameDayBuys);
+      state = processTransaction(state, sell, recentBuys);
 
       // Cost basis: 100*50 (same-day) + 50*46.67 (avg) = 5000 + 2333.5 = 7333.5
       // Proceeds: 150*60 = 9000
@@ -652,7 +652,7 @@ describe("Moving-Average Accounting Logic", () => {
       expect(new Decimal(state.realizedProfit).toDecimalPlaces(0).toString()).toBe(expectedProfit.toDecimalPlaces(0).toString());
     });
 
-    it("should not apply same-day logic to different days", () => {
+    it("should use avg cost when buy is outside the window (default 1-day window)", () => {
       let state = {
         totalShares: new Decimal(0),
         totalInvested: new Decimal(0),
@@ -660,7 +660,7 @@ describe("Moving-Average Accounting Logic", () => {
         realizedProfit: new Decimal(0),
       };
 
-      let sameDayBuys: Array<{ quantity: Decimal; unitPrice: Decimal }> = [];
+      const recentBuys: Array<{ date: string; quantity: Decimal; unitPrice: Decimal }> = [];
 
       // BUY 100 shares at 50 PKR on Day 1
       const buy: Transaction = {
@@ -675,10 +675,9 @@ describe("Moving-Average Accounting Logic", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      state = processTransaction(state, buy, sameDayBuys);
+      state = processTransaction(state, buy, recentBuys);
 
-      // Reset same-day buys for a new day
-      sameDayBuys = [];
+      // No manual reset needed — the window (default 1 day) excludes Day 1 buys when selling on Day 2
 
       // SELL 50 shares at 60 PKR on Day 2 (different day)
       const sell: Transaction = {
@@ -693,9 +692,9 @@ describe("Moving-Average Accounting Logic", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      state = processTransaction(state, sell, sameDayBuys);
+      state = processTransaction(state, sell, recentBuys);
 
-      // Should use avg price (50), not same-day price
+      // Day 1 buy is outside the 1-day window when selling on Day 2 → uses avg cost (50)
       // Profit: (60 - 50) * 50 = 500
       expect(state.realizedProfit.toString()).toBe("500");
     });
@@ -708,7 +707,7 @@ describe("Moving-Average Accounting Logic", () => {
         realizedProfit: new Decimal(0),
       };
 
-      const sameDayBuys: Array<{ quantity: Decimal; unitPrice: Decimal }> = [];
+      const recentBuys: Array<{ date: string; quantity: Decimal; unitPrice: Decimal }> = [];
 
       // SELL 50 shares at 60 PKR (no same-day buys yet)
       const sell: Transaction = {
@@ -723,7 +722,7 @@ describe("Moving-Average Accounting Logic", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      state = processTransaction(state, sell, sameDayBuys);
+      state = processTransaction(state, sell, recentBuys);
 
       // Should use avg price: (60 - 50) * 50 = 500
       expect(state.realizedProfit.toString()).toBe("500");
@@ -742,7 +741,7 @@ describe("Moving-Average Accounting Logic", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      state = processTransaction(state, buy, sameDayBuys);
+      state = processTransaction(state, buy, recentBuys);
 
       expect(state.totalShares.toString()).toBe("150");
 
@@ -759,11 +758,131 @@ describe("Moving-Average Accounting Logic", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      state = processTransaction(state, sell2, sameDayBuys);
+      state = processTransaction(state, sell2, recentBuys);
 
       // This sell should use same-day price (55): (65 - 55) * 30 = 300
       // Total profit: 500 + 300 = 800
       expect(state.realizedProfit.toString()).toBe("800");
+    });
+
+    it("2-day window: buy on Day 1, sell on Day 2 uses the Day 1 buy price", () => {
+      let state = {
+        totalShares: new Decimal(0),
+        totalInvested: new Decimal(0),
+        avgCost: new Decimal(0),
+        realizedProfit: new Decimal(0),
+      };
+      const recentBuys: Array<{ date: string; quantity: Decimal; unitPrice: Decimal }> = [];
+
+      const buy: Transaction = {
+        id: 1, stockId: 1, type: "BUY",
+        date: "2024-06-08", quantity: "200", totalAmount: "21000", unitPrice: "105",
+        notes: null, createdAt: new Date(), updatedAt: new Date(),
+      };
+      state = processTransaction(state, buy, recentBuys, 2);
+
+      const sell: Transaction = {
+        id: 2, stockId: 1, type: "SELL",
+        date: "2024-06-09", quantity: "200", totalAmount: "21400", unitPrice: "107",
+        notes: null, createdAt: new Date(), updatedAt: new Date(),
+      };
+      state = processTransaction(state, sell, recentBuys, 2);
+
+      // Profit: (107 - 105) * 200 = 400 (using Day 1 buy price, not avg)
+      expect(state.realizedProfit.toString()).toBe("400");
+    });
+
+    it("2-day window: buy on Day 1, sell on Day 3 falls back to avg cost", () => {
+      let state = {
+        totalShares: new Decimal(0),
+        totalInvested: new Decimal(0),
+        avgCost: new Decimal(0),
+        realizedProfit: new Decimal(0),
+      };
+      const recentBuys: Array<{ date: string; quantity: Decimal; unitPrice: Decimal }> = [];
+
+      const buy: Transaction = {
+        id: 1, stockId: 1, type: "BUY",
+        date: "2024-06-08", quantity: "200", totalAmount: "21000", unitPrice: "105",
+        notes: null, createdAt: new Date(), updatedAt: new Date(),
+      };
+      state = processTransaction(state, buy, recentBuys, 2);
+
+      const sell: Transaction = {
+        id: 2, stockId: 1, type: "SELL",
+        date: "2024-06-10", quantity: "200", totalAmount: "21400", unitPrice: "107",
+        notes: null, createdAt: new Date(), updatedAt: new Date(),
+      };
+      state = processTransaction(state, sell, recentBuys, 2);
+
+      // Day 1 is outside the 2-day window when selling on Day 3 → uses avg cost (105)
+      // Profit: (107 - 105) * 200 = 400 (same in this case; avg equals buy price)
+      expect(state.totalShares.toString()).toBe("0");
+      // Avg cost equals buy price here, so profit is same either way
+      expect(state.realizedProfit.toString()).toBe("400");
+    });
+
+    it("3-day window: buy on Day 1, sell on Day 3 uses the Day 1 buy price", () => {
+      // Simulate scenario with prior holdings so avg != buy price
+      let state = {
+        totalShares: new Decimal(100),
+        totalInvested: new Decimal(10640), // avg cost = 106.4
+        avgCost: new Decimal(106.4),
+        realizedProfit: new Decimal(0),
+      };
+      const recentBuys: Array<{ date: string; quantity: Decimal; unitPrice: Decimal }> = [];
+
+      // Fresh buy at 105 on Day 1
+      const buy: Transaction = {
+        id: 1, stockId: 1, type: "BUY",
+        date: "2024-06-08", quantity: "200", totalAmount: "21000", unitPrice: "105",
+        notes: null, createdAt: new Date(), updatedAt: new Date(),
+      };
+      state = processTransaction(state, buy, recentBuys, 3);
+      // avg now = (10640 + 21000) / 300 = 105.47
+
+      // Sell 200 on Day 3 at 107 — within 3-day window
+      const sell: Transaction = {
+        id: 2, stockId: 1, type: "SELL",
+        date: "2024-06-10", quantity: "200", totalAmount: "21400", unitPrice: "107",
+        notes: null, createdAt: new Date(), updatedAt: new Date(),
+      };
+      state = processTransaction(state, sell, recentBuys, 3);
+
+      // Day 1 is within 3-day window (cutoff = June 8, buy date = June 8 ≥ cutoff)
+      // 200 shares matched at 105 → profit = (107 - 105) * 200 = 400
+      expect(state.realizedProfit.toString()).toBe("400");
+    });
+
+    it("3-day window: buy on Day 1, sell on Day 4 falls back to avg cost", () => {
+      let state = {
+        totalShares: new Decimal(100),
+        totalInvested: new Decimal(10640), // avg cost = 106.4
+        avgCost: new Decimal(106.4),
+        realizedProfit: new Decimal(0),
+      };
+      const recentBuys: Array<{ date: string; quantity: Decimal; unitPrice: Decimal }> = [];
+
+      const buy: Transaction = {
+        id: 1, stockId: 1, type: "BUY",
+        date: "2024-06-08", quantity: "200", totalAmount: "21000", unitPrice: "105",
+        notes: null, createdAt: new Date(), updatedAt: new Date(),
+      };
+      state = processTransaction(state, buy, recentBuys, 3);
+      // avg = (10640 + 21000) / 300 = 105.4666...
+
+      const sell: Transaction = {
+        id: 2, stockId: 1, type: "SELL",
+        date: "2024-06-11", quantity: "200", totalAmount: "21400", unitPrice: "107",
+        notes: null, createdAt: new Date(), updatedAt: new Date(),
+      };
+      state = processTransaction(state, sell, recentBuys, 3);
+
+      // Day 1 is outside 3-day window when selling on Day 4 (cutoff = June 9) → uses avg cost
+      const avgCost = new Decimal(10640 + 21000).dividedBy(300);
+      const expectedProfit = new Decimal(21400).minus(avgCost.times(200));
+      expect(new Decimal(state.realizedProfit).toDecimalPlaces(4).toString())
+        .toBe(expectedProfit.toDecimalPlaces(4).toString());
     });
   });
 });

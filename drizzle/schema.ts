@@ -146,6 +146,23 @@ export const stockAggregatesRelations = relations(stockAggregates, ({ one }) => 
 }));
 
 /**
+ * User-level settings (trading window, etc.)
+ */
+export const userSettings = pgTable("userSettings", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").references(() => users.id).notNull().unique(),
+  tradingWindowDays: integer("tradingWindowDays").notNull().default(1),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+export type UserSettings = typeof userSettings.$inferSelect;
+export type InsertUserSettings = typeof userSettings.$inferInsert;
+
+export const userSettingsRelations = relations(userSettings, ({ one }) => ({
+  user: one(users, { fields: [userSettings.userId], references: [users.id] }),
+}));
+
+/**
  * Password Reset Tokens table
  */
 export const passwordResetTokens = pgTable("password_reset_tokens", {

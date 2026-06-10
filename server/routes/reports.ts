@@ -1,7 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { eq, and, gte, lte, sql, desc, asc, inArray } from "drizzle-orm";
-import { getDb, getStockById } from "../db";
+import { getDb, getStockById, getUserSettings } from "../db";
 import { transactions, stocks, stockAggregates } from "../../drizzle/schema";
 import Decimal from "decimal.js";
 import { processTransaction } from "../db";
@@ -16,6 +16,9 @@ export const reportsRouter = router({
       const db = await getDb();
       if (!db) return [];
 
+      const userSettingsData = await getUserSettings(ctx.user.id);
+      const tradingWindowDays = userSettingsData?.tradingWindowDays ?? 1;
+
       // Get all transactions up to the end date, ordered chronologically
       const allTxns = await db
         .select()
@@ -23,7 +26,7 @@ export const reportsRouter = router({
         .where(
           and(
             lte(transactions.date, input.to.toISOString().split("T")[0]),
-            eq(transactions.userId, ctx.user.id), // Authenticated user
+            eq(transactions.userId, ctx.user.id),
             input.stockId ? eq(transactions.stockId, input.stockId) : undefined
           )
         )
@@ -37,8 +40,8 @@ export const reportsRouter = router({
       }> = {};
       const profitByDate: Record<string, { profit: number; losses: any[] }> = {};
 
-      // Track same-day buys for intraday trading logic per stock
-      const sameDayBuysByStock: Record<number, { date: string; buys: Array<{ quantity: Decimal; unitPrice: Decimal }> }> = {};
+      // Per-stock rolling buy lists for multi-day window FIFO matching
+      const recentBuysByStock: Record<number, Array<{ date: string; quantity: Decimal; unitPrice: Decimal }>> = {};
 
       for (const txn of allTxns) {
         if (!stockStates[txn.stockId]) {
@@ -48,83 +51,59 @@ export const reportsRouter = router({
             avgCost: new Decimal(0),
           };
         }
+        if (!recentBuysByStock[txn.stockId]) {
+          recentBuysByStock[txn.stockId] = [];
+        }
 
         const state = stockStates[txn.stockId];
+        const recentBuys = recentBuysByStock[txn.stockId];
         const date = txn.date.toString();
         const isInRange = txn.date >= input.from.toISOString().split("T")[0] && txn.date <= input.to.toISOString().split("T")[0];
 
-        // Reset same-day tracking when date changes for this stock
-        if (!sameDayBuysByStock[txn.stockId] || sameDayBuysByStock[txn.stockId].date !== date) {
-          sameDayBuysByStock[txn.stockId] = { date, buys: [] };
-        }
-
-        const sameDayBuys = sameDayBuysByStock[txn.stockId].buys;
-
-        if (txn.type === "SELL" && txn.quantity && isInRange) {
-          const qty = new Decimal(txn.quantity.toString());
-          const proceeds = new Decimal(txn.totalAmount.toString());
-
-          // Calculate cost basis using same-day buy logic (FIFO)
-          let remainingToSell = qty;
-          let costBasis = new Decimal(0);
-
-          // Match with same-day buys first
-          for (let i = 0; i < sameDayBuys.length && remainingToSell.greaterThan(0); i++) {
-            const buy = sameDayBuys[i];
-            if (buy.quantity.greaterThan(0)) {
-              const qtyToMatch = Decimal.min(buy.quantity, remainingToSell);
-              costBasis = costBasis.plus(qtyToMatch.times(buy.unitPrice));
-              buy.quantity = buy.quantity.minus(qtyToMatch);
-              remainingToSell = remainingToSell.minus(qtyToMatch);
-            }
-          }
-
-          // If there are still shares to sell, use the average cost
-          if (remainingToSell.greaterThan(0)) {
-            costBasis = costBasis.plus(state.avgCost.times(remainingToSell));
-          }
-
-          const profit = proceeds.minus(costBasis);
-          const profitValue = parseFloat(profit.toString());
-
-          if (!profitByDate[date]) {
-            profitByDate[date] = { profit: 0, losses: [] };
-          }
-          profitByDate[date].profit += profitValue;
-
-          if (profitValue < 0) {
-            const stock = await getStockById(txn.stockId);
-            profitByDate[date].losses.push({
-              stockId: txn.stockId,
-              stockSymbol: stock?.symbol || "Unknown",
-              quantity: parseFloat(qty.toString()),
-              unitPrice: parseFloat(proceeds.dividedBy(qty).toString()),
-              avgCost: parseFloat(state.avgCost.toString()),
-              totalAmount: parseFloat(proceeds.toString()),
-              loss: profitValue,
-            });
-          }
-        } else if (txn.type === "DIVIDEND" && isInRange) {
-          const dividendAmount = parseFloat(txn.totalAmount.toString());
-          if (!profitByDate[date]) {
-            profitByDate[date] = { profit: 0, losses: [] };
-          }
-          profitByDate[date].profit += dividendAmount;
-        }
-
-        // Update state for next transaction (replay)
+        // processTransaction updates recentBuys in place and returns realized profit for this txn
         const currentState = {
           totalShares: state.totalShares,
           totalInvested: state.totalInvested,
           avgCost: state.avgCost,
           realizedProfit: new Decimal(0),
         };
-        const newState = processTransaction(currentState, txn, sameDayBuys);
+        const newState = processTransaction(currentState, txn, recentBuys, tradingWindowDays);
         stockStates[txn.stockId] = {
           totalShares: newState.totalShares,
           totalInvested: newState.totalInvested,
           avgCost: newState.avgCost,
         };
+
+        if (isInRange) {
+          if (txn.type === "SELL" && txn.quantity) {
+            const profitValue = newState.realizedProfit.toNumber();
+            if (!profitByDate[date]) {
+              profitByDate[date] = { profit: 0, losses: [] };
+            }
+            profitByDate[date].profit += profitValue;
+
+            if (profitValue < 0) {
+              const qty = new Decimal(txn.quantity.toString());
+              const proceeds = new Decimal(txn.totalAmount.toString());
+              const stock = await getStockById(txn.stockId);
+              profitByDate[date].losses.push({
+                stockId: txn.stockId,
+                stockSymbol: stock?.symbol || "Unknown",
+                quantity: parseFloat(qty.toString()),
+                unitPrice: parseFloat(proceeds.dividedBy(qty).toString()),
+                avgCost: parseFloat(state.avgCost.toString()),
+                totalAmount: parseFloat(proceeds.toString()),
+                loss: profitValue,
+              });
+            }
+          } else if (txn.type === "DIVIDEND") {
+            const dividendAmount = parseFloat(txn.totalAmount.toString());
+            if (!profitByDate[date]) {
+              profitByDate[date] = { profit: 0, losses: [] };
+            }
+            profitByDate[date].profit += dividendAmount;
+          }
+        }
       }
 
       return Object.entries(profitByDate)

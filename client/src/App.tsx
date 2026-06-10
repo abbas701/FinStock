@@ -13,6 +13,7 @@ import Watchlist from "./pages/Watchlist";
 import Reports from "./pages/Reports";
 import Import from "./pages/Import";
 import TransactionAudit from "./pages/TransactionAudit";
+import Settings from "./pages/Settings";
 import LoginPage from "./pages/auth/LoginPage";
 import SignupPage from "./pages/auth/SignupPage";
 import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
@@ -57,6 +58,9 @@ function Router() {
       </Route>
       <Route path="/reports">
         <ProtectedRoute component={Reports} />
+      </Route>
+      <Route path="/settings">
+        <ProtectedRoute component={Settings} />
       </Route>
 
       <Route path="/404" component={NotFound} />
