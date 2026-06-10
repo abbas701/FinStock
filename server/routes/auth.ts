@@ -2,6 +2,7 @@ import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { upsertUser, getUserByEmail, getUserByOpenId } from "../db";
 import { sdk } from "../_core/sdk";
+import { getSessionCookieOptions } from "../_core/cookies";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { TRPCError } from "@trpc/server";
 import { ENV } from "../_core/env";
@@ -77,18 +78,18 @@ export const authRouter = router({
         type: 'userId'
       });
 
+      const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.cookie(COOKIE_NAME, sessionToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        ...cookieOptions,
         maxAge: ONE_YEAR_MS,
-        path: "/",
       });
 
       return { success: true, user };
     }),
 
   logout: publicProcedure.mutation(({ ctx }) => {
-    ctx.res.clearCookie(COOKIE_NAME);
+    const cookieOptions = getSessionCookieOptions(ctx.req);
+    ctx.res.clearCookie(COOKIE_NAME, cookieOptions);
     return { success: true };
   }),
 
