@@ -103,6 +103,17 @@ export async function ensureTablesExist() {
     `);
 
     await client.unsafe(`
+      CREATE TABLE IF NOT EXISTS "userSettings" (
+        "id" serial PRIMARY KEY NOT NULL,
+        "userId" integer NOT NULL,
+        "tradingWindowDays" integer NOT NULL DEFAULT 1,
+        "updatedAt" timestamp DEFAULT now() NOT NULL,
+        CONSTRAINT "userSettings_userId_unique" UNIQUE("userId"),
+        CONSTRAINT "userSettings_userId_fk" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE
+      );
+    `);
+
+    await client.unsafe(`
       CREATE TABLE IF NOT EXISTS "password_reset_tokens" (
         "id" serial PRIMARY KEY NOT NULL,
         "userId" integer NOT NULL,
