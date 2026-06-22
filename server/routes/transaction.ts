@@ -92,6 +92,196 @@ export const transactionRouter = router({
   }),
 
   /**
+   * Get running balance over a date range for charting
+   */
+  runningBalanceRange: protectedProcedure
+    .input(
+      z.object({
+        from: z.date(),
+        to: z.date(),
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) return [];
+
+      const conditions = [
+        eq(transactions.userId, ctx.user.id),
+        lte(transactions.date, input.to),
+      ];
+
+      const allTransactions = await db
+        .select({
+          id: transactions.id,
+          stockId: transactions.stockId,
+          type: transactions.type,
+          date: transactions.date,
+          quantity: transactions.quantity,
+          totalAmount: transactions.totalAmount,
+          unitPrice: transactions.unitPrice,
+          stockSymbol: stocks.symbol,
+          stockName: stocks.name,
+        })
+        .from(transactions)
+        .leftJoin(stocks, eq(transactions.stockId, stocks.id))
+        .where(and(...conditions))
+        .orderBy(asc(transactions.date), asc(transactions.createdAt));
+
+      // Group by date
+      const txnByDate: Record<string, any[]> = {};
+      for (const txn of allTransactions) {
+        const dateKey = txn.date.toString();
+        if (!txnByDate[dateKey]) {
+          txnByDate[dateKey] = [];
+        }
+        txnByDate[dateKey].push(txn);
+      }
+
+      // Calculate running balance for each date
+      const result: any[] = [];
+      let totalInvested = 0;
+      let totalRealized = 0;
+      let totalDividends = 0;
+      let shares: Record<number, { symbol: string; name: string; quantity: number; costBasis: number }> = {};
+
+      for (const txn of allTransactions) {
+        const stockId = txn.stockId;
+        const amount = parseFloat(txn.totalAmount || "0");
+        const qty = parseFloat(txn.quantity || "0");
+
+        if (!shares[stockId]) {
+          shares[stockId] = {
+            symbol: txn.stockSymbol || "Unknown",
+            name: txn.stockName || "Unknown",
+            quantity: 0,
+            costBasis: 0,
+          };
+        }
+
+        if (txn.type === "BUY") {
+          const prevQty = shares[stockId].quantity;
+          const prevCost = shares[stockId].costBasis;
+          shares[stockId].quantity += qty;
+          shares[stockId].costBasis = ((prevQty * prevCost) + amount) / (shares[stockId].quantity || 1);
+          totalInvested += amount;
+        } else if (txn.type === "SELL") {
+          const sellCost = shares[stockId].costBasis * qty;
+          totalRealized += amount - sellCost;
+          shares[stockId].quantity -= qty;
+          if (shares[stockId].quantity < 0.001) {
+            shares[stockId].quantity = 0;
+          }
+        } else if (txn.type === "DIVIDEND") {
+          totalDividends += amount;
+          totalInvested += amount; // Dividends are reinvested
+        }
+
+        // Only add to result if date is within range
+        if (txn.date >= input.from && txn.date <= input.to) {
+          result.push({
+            date: txn.date.toString(),
+            totalInvested,
+            totalRealized,
+            totalDividends,
+            netBalance: totalInvested + totalRealized + totalDividends,
+          });
+        }
+      }
+
+      return result;
+    }),
+
+  /**
+   * Get running balance as of a specific date
+   */
+  runningBalance: protectedProcedure
+    .input(
+      z.object({
+        asOfDate: z.date(),
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) return { date: input.asOfDate, stocks: [], totalInvested: 0, totalRealized: 0, totalDividends: 0 };
+
+      const conditions = [
+        eq(transactions.userId, ctx.user.id),
+        lte(transactions.date, input.asOfDate),
+      ];
+
+      const allTransactions = await db
+        .select({
+          id: transactions.id,
+          stockId: transactions.stockId,
+          type: transactions.type,
+          date: transactions.date,
+          quantity: transactions.quantity,
+          totalAmount: transactions.totalAmount,
+          unitPrice: transactions.unitPrice,
+          stockSymbol: stocks.symbol,
+          stockName: stocks.name,
+        })
+        .from(transactions)
+        .leftJoin(stocks, eq(transactions.stockId, stocks.id))
+        .where(and(...conditions))
+        .orderBy(asc(transactions.date), asc(transactions.createdAt));
+
+      // Group transactions by stock and calculate running totals
+      const stockBalances: Record<number, any> = {};
+      let totalInvested = 0;
+      let totalDividends = 0;
+      let realizedProfit = 0;
+      let shares: Record<number, { symbol: string; name: string; quantity: number; costBasis: number }> = {};
+
+      for (const txn of allTransactions) {
+        const stockId = txn.stockId;
+        const amount = parseFloat(txn.totalAmount || "0");
+        const qty = parseFloat(txn.quantity || "0");
+
+        if (!shares[stockId]) {
+          shares[stockId] = {
+            symbol: txn.stockSymbol || "Unknown",
+            name: txn.stockName || "Unknown",
+            quantity: 0,
+            costBasis: 0,
+          };
+        }
+
+        if (txn.type === "BUY") {
+          const prevQty = shares[stockId].quantity;
+          const prevCost = shares[stockId].costBasis;
+          shares[stockId].quantity += qty;
+          shares[stockId].costBasis = ((prevQty * prevCost) + amount) / (shares[stockId].quantity || 1);
+          totalInvested += amount;
+        } else if (txn.type === "SELL") {
+          const sellCost = shares[stockId].costBasis * qty;
+          realizedProfit += amount - sellCost;
+          shares[stockId].quantity -= qty;
+          if (shares[stockId].quantity < 0.001) {
+            shares[stockId].quantity = 0;
+          }
+        } else if (txn.type === "DIVIDEND") {
+          totalDividends += amount;
+          totalInvested += amount; // Dividends are reinvested
+        }
+      }
+
+      // Filter out zero holdings
+      const activeStocks = Object.entries(shares)
+        .filter(([_, s]) => s.quantity > 0.001)
+        .map(([_, s]) => s);
+
+      return {
+        date: input.asOfDate,
+        stocks: activeStocks,
+        totalInvested,
+        totalRealized: realizedProfit,
+        totalDividends,
+        allTransactions,
+      };
+    }),
+
+  /**
    * Get all transactions for audit/review with grouping options
    */
   audit: protectedProcedure

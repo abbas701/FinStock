@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertCircle } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 
-type ChartType = "daywise" | "performance" | "volume" | "distribution";
+type ChartType = "daywise" | "runningBalance" | "performance" | "volume" | "distribution";
 
 export default function Reports() {
   const now = new Date();
@@ -68,7 +68,15 @@ export default function Reports() {
     { enabled: !!user && selectedChart === "distribution" }
   );
 
-  const isLoading = daywiseLoading || performanceLoading || volumeLoading || distributionLoading;
+  const { data: runningBalanceData, isLoading: runningBalanceLoading } = trpc.transaction.runningBalanceRange.useQuery(
+    {
+      from: new Date(fromDate),
+      to: new Date(toDate),
+    },
+    { enabled: !!user && selectedChart === "runningBalance" }
+  );
+
+  const isLoading = daywiseLoading || performanceLoading || volumeLoading || distributionLoading || runningBalanceLoading;
 
   // Prepare chart data
   const daywiseChartData = daywiseData
@@ -78,6 +86,39 @@ export default function Reports() {
         data: daywiseData.map((d) => ({
           x: d.date,
           y: d.profit,
+        })),
+      },
+    ]
+    : [];
+
+  const runningBalanceChartData = runningBalanceData
+    ? [
+      {
+        id: "Total Invested",
+        data: runningBalanceData.map((d) => ({
+          x: d.date,
+          y: d.totalInvested,
+        })),
+      },
+      {
+        id: "Realized Profit",
+        data: runningBalanceData.map((d) => ({
+          x: d.date,
+          y: d.totalRealized,
+        })),
+      },
+      {
+        id: "Dividends",
+        data: runningBalanceData.map((d) => ({
+          x: d.date,
+          y: d.totalDividends,
+        })),
+      },
+      {
+        id: "Net Balance",
+        data: runningBalanceData.map((d) => ({
+          x: d.date,
+          y: d.netBalance,
         })),
       },
     ]
@@ -143,6 +184,7 @@ export default function Reports() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="daywise">Daywise Profit</SelectItem>
+                  <SelectItem value="runningBalance">Running Balance</SelectItem>
                   <SelectItem value="performance">Stock Performance</SelectItem>
                   <SelectItem value="volume">Transaction Volume</SelectItem>
                   <SelectItem value="distribution">Portfolio Distribution</SelectItem>
@@ -221,12 +263,14 @@ export default function Reports() {
         <CardHeader>
           <CardTitle className="text-gray-900 dark:text-gray-100">
             {selectedChart === "daywise" && "Daywise Profit Trend"}
+            {selectedChart === "runningBalance" && "Running Balance Over Time"}
             {selectedChart === "performance" && "Stock Performance Comparison"}
             {selectedChart === "volume" && "Transaction Volume Over Time"}
             {selectedChart === "distribution" && "Portfolio Distribution"}
           </CardTitle>
           <CardDescription className="text-gray-600 dark:text-gray-400">
             {selectedChart === "daywise" && "Daily realized profit/loss over the selected period"}
+            {selectedChart === "runningBalance" && "Cumulative balance progression showing invested, realized profit, and dividends"}
             {selectedChart === "performance" && "Compare investment and returns across stocks"}
             {selectedChart === "volume" && "Transaction volume by type over time"}
             {selectedChart === "distribution" && "Portfolio allocation by stock"}
@@ -294,6 +338,80 @@ export default function Reports() {
                       itemsSpacing: 0,
                       itemDirection: "left-to-right",
                       itemWidth: 80,
+                      itemHeight: 20,
+                      itemOpacity: 0.75,
+                      symbolSize: 12,
+                      symbolShape: "circle",
+                      symbolBorderColor: isDark ? "rgba(255, 255, 255, 0.5)" : "rgba(0, 0, 0, .5)",
+                      itemTextColor: legendTextColor,
+                      effects: [
+                        {
+                          on: "hover",
+                          style: {
+                            itemBackground: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, .03)",
+                            itemOpacity: 1,
+                          },
+                        },
+                      ],
+                    },
+                  ]}
+                />
+              )}
+
+              {selectedChart === "runningBalance" && runningBalanceChartData.length > 0 && (
+                <ResponsiveLine
+                  data={runningBalanceChartData}
+                  margin={{ top: 50, right: 110, bottom: 50, left: 60 }}
+                  xScale={{ type: "point" }}
+                  yScale={{
+                    type: "linear",
+                    min: "auto",
+                    max: "auto",
+                  }}
+                  theme={{
+                    text: { fill: textColor, fontSize: 12 },
+                    axis: {
+                      domain: { line: { stroke: axisColor, strokeWidth: 1 } },
+                      ticks: { line: { stroke: axisColor, strokeWidth: 1 }, text: { fill: textColor } },
+                      legend: { text: { fill: textColor } },
+                    },
+                    grid: { line: { stroke: gridColor, strokeWidth: 1 } },
+                  }}
+                  colors={isDark ? ["#60a5fa", "#34d399", "#fbbf24", "#f87171"] : ["#2563eb", "#10b981", "#f59e0b", "#ef4444"]}
+                  axisTop={null}
+                  axisRight={null}
+                  axisBottom={{
+                    tickSize: 5,
+                    tickPadding: 5,
+                    tickRotation: -45,
+                    legend: "Date",
+                    legendOffset: 45,
+                    legendPosition: "middle",
+                  }}
+                  axisLeft={{
+                    tickSize: 5,
+                    tickPadding: 5,
+                    tickRotation: 0,
+                    legend: "Amount (PKR)",
+                    legendOffset: -40,
+                    legendPosition: "middle",
+                    format: (value) => formatCurrency(value),
+                  }}
+                  pointSize={6}
+                  pointColor={cardBg}
+                  pointBorderWidth={2}
+                  pointBorderColor={{ from: "serieColor" }}
+                  useMesh={true}
+                  legends={[
+                    {
+                      anchor: "bottom-right",
+                      direction: "column",
+                      justify: false,
+                      translateX: 100,
+                      translateY: 0,
+                      itemsSpacing: 0,
+                      itemDirection: "left-to-right",
+                      itemWidth: 100,
                       itemHeight: 20,
                       itemOpacity: 0.75,
                       symbolSize: 12,
@@ -483,6 +601,7 @@ export default function Reports() {
               )}
 
               {((selectedChart === "daywise" && daywiseChartData.length === 0) ||
+                (selectedChart === "runningBalance" && runningBalanceChartData.length === 0) ||
                 (selectedChart === "performance" && performanceChartData.length === 0) ||
                 (selectedChart === "volume" && volumeChartData.length === 0) ||
                 (selectedChart === "distribution" && distributionChartData.length === 0)) && (
