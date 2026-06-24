@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,8 +73,23 @@ export default function Reports() {
       from: new Date(fromDate + "T00:00:00Z"),
       to: new Date(toDate + "T23:59:59Z"),
     },
-    { enabled: !!user && selectedChart === "runningBalance" }
+    {
+      enabled: !!user && selectedChart === "runningBalance",
+      onSuccess: (data) => {
+        console.log("✅ Running balance data received:", { count: data?.length, data: data?.slice(0, 3) });
+      },
+      onError: (error) => {
+        console.error("❌ Running balance query error:", error);
+      },
+    }
   );
+
+  // Log when query is enabled/disabled
+  useEffect(() => {
+    if (selectedChart === "runningBalance") {
+      console.log("🔍 Running balance query enabled for date range:", { fromDate, toDate });
+    }
+  }, [selectedChart, fromDate, toDate]);
 
   const isLoading = daywiseLoading || performanceLoading || volumeLoading || distributionLoading || runningBalanceLoading;
 
