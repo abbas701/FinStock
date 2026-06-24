@@ -102,43 +102,44 @@ export const transactionRouter = router({
       })
     )
     .query(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) return [];
+      try {
+        const db = await getDb();
+        if (!db) return [];
 
-      console.log("📊 Running Balance Query:", { userId: ctx.user.id, from: input.from, to: input.to });
+        console.log("📊 Running Balance Query:", { userId: ctx.user.id, from: input.from, to: input.to });
 
-      // Convert Date objects to date strings for comparison
-      const fromDateStr = input.from instanceof Date ? input.from.toISOString().split('T')[0] : input.from;
-      const toDateStr = input.to instanceof Date ? input.to.toISOString().split('T')[0] : input.to;
+        // Convert Date objects to date strings for comparison
+        const fromDateStr = input.from instanceof Date ? input.from.toISOString().split('T')[0] : input.from;
+        const toDateStr = input.to instanceof Date ? input.to.toISOString().split('T')[0] : input.to;
 
-      console.log("📅 Date range (strings):", { fromDateStr, toDateStr });
+        console.log("📅 Date range (strings):", { fromDateStr, toDateStr });
 
-      const allTransactions = await db
-        .select({
-          id: transactions.id,
-          stockId: transactions.stockId,
-          type: transactions.type,
-          date: transactions.date,
-          quantity: transactions.quantity,
-          totalAmount: transactions.totalAmount,
-          unitPrice: transactions.unitPrice,
-          stockSymbol: stocks.symbol,
-          stockName: stocks.name,
-        })
-        .from(transactions)
-        .leftJoin(stocks, eq(transactions.stockId, stocks.id))
-        .where(
-          and(
-            eq(transactions.userId, ctx.user.id),
-            lte(transactions.date, new Date(toDateStr))
+        const allTransactions = await db
+          .select({
+            id: transactions.id,
+            stockId: transactions.stockId,
+            type: transactions.type,
+            date: transactions.date,
+            quantity: transactions.quantity,
+            totalAmount: transactions.totalAmount,
+            unitPrice: transactions.unitPrice,
+            stockSymbol: stocks.symbol,
+            stockName: stocks.name,
+          })
+          .from(transactions)
+          .leftJoin(stocks, eq(transactions.stockId, stocks.id))
+          .where(
+            and(
+              eq(transactions.userId, ctx.user.id),
+              lte(transactions.date, toDateStr as any)
+            )
           )
-        )
-        .orderBy(asc(transactions.date), asc(transactions.createdAt));
+          .orderBy(asc(transactions.date), asc(transactions.createdAt));
 
-      console.log("📦 Total transactions fetched:", allTransactions.length);
-      if (allTransactions.length > 0) {
-        console.log("📝 Sample transaction:", allTransactions[0]);
-      }
+        console.log("📦 Total transactions fetched:", allTransactions.length);
+        if (allTransactions.length > 0) {
+          console.log("📝 Sample transaction:", allTransactions[0]);
+        }
 
       // Group by date
       const txnByDate: Record<string, any[]> = {};
@@ -202,9 +203,13 @@ export const transactionRouter = router({
         }
       }
 
-      const result = Object.values(resultByDate);
-      console.log("🎯 Running balance result:", { count: result.length, data: result.slice(0, 3) });
-      return result;
+        const result = Object.values(resultByDate);
+        console.log("🎯 Running balance result:", { count: result.length, data: result.slice(0, 3) });
+        return result;
+      } catch (error) {
+        console.error("❌ Running balance query error:", error);
+        throw error;
+      }
     }),
 
   /**
