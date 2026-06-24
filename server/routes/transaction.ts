@@ -138,7 +138,7 @@ export const transactionRouter = router({
       }
 
       // Calculate running balance for each date
-      const result: any[] = [];
+      const resultByDate: Record<string, any> = {};
       let totalInvested = 0;
       let totalRealized = 0;
       let totalDividends = 0;
@@ -178,17 +178,18 @@ export const transactionRouter = router({
 
         // Only add to result if date is within range
         if (txn.date >= input.from && txn.date <= input.to) {
-          result.push({
-            date: txn.date.toString(),
+          const dateKey = txn.date.toString();
+          resultByDate[dateKey] = {
+            date: dateKey,
             totalInvested,
             totalRealized,
             totalDividends,
             netBalance: totalInvested + totalRealized + totalDividends,
-          });
+          };
         }
       }
 
-      return result;
+      return Object.values(resultByDate);
     }),
 
   /**

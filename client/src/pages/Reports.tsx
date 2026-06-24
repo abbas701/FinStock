@@ -192,27 +192,29 @@ export default function Reports() {
               </Select>
             </div>
 
-            <div>
-              <Label htmlFor="stock-filter">Stock (Optional)</Label>
-              <Select
-                value={selectedStockId?.toString() || "all"}
-                onValueChange={(v) => setSelectedStockId(v === "all" ? undefined : parseInt(v))}
-              >
-                <SelectTrigger id="stock-filter">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Stocks</SelectItem>
-                  {stocks?.map((stock) => (
-                    <SelectItem key={stock.id} value={stock.id.toString()}>
-                      {stock.symbol}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {selectedChart !== "runningBalance" && (
+              <div>
+                <Label htmlFor="stock-filter">Stock (Optional)</Label>
+                <Select
+                  value={selectedStockId?.toString() || "all"}
+                  onValueChange={(v) => setSelectedStockId(v === "all" ? undefined : parseInt(v))}
+                >
+                  <SelectTrigger id="stock-filter">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Stocks</SelectItem>
+                    {stocks?.map((stock) => (
+                      <SelectItem key={stock.id} value={stock.id.toString()}>
+                        {stock.symbol}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
-            {(selectedChart === "daywise" || selectedChart === "volume") && (
+            {(selectedChart === "daywise" || selectedChart === "volume" || selectedChart === "runningBalance") && (
               <>
                 <div>
                   <Label htmlFor="from">From Date</Label>
