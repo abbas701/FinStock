@@ -105,10 +105,9 @@ export const transactionRouter = router({
       const db = await getDb();
       if (!db) return [];
 
-      const conditions = [
-        eq(transactions.userId, ctx.user.id),
-        lte(transactions.date, input.to),
-      ];
+      // Convert Date objects to date strings for comparison
+      const fromDateStr = input.from instanceof Date ? input.from.toISOString().split('T')[0] : input.from;
+      const toDateStr = input.to instanceof Date ? input.to.toISOString().split('T')[0] : input.to;
 
       const allTransactions = await db
         .select({
@@ -124,7 +123,12 @@ export const transactionRouter = router({
         })
         .from(transactions)
         .leftJoin(stocks, eq(transactions.stockId, stocks.id))
-        .where(and(...conditions))
+        .where(
+          and(
+            eq(transactions.userId, ctx.user.id),
+            lte(transactions.date, new Date(toDateStr))
+          )
+        )
         .orderBy(asc(transactions.date), asc(transactions.createdAt));
 
       // Group by date
@@ -177,10 +181,10 @@ export const transactionRouter = router({
         }
 
         // Only add to result if date is within range
-        if (txn.date >= input.from && txn.date <= input.to) {
-          const dateKey = txn.date.toString();
-          resultByDate[dateKey] = {
-            date: dateKey,
+        const txnDateStr = txn.date instanceof Date ? txn.date.toISOString().split('T')[0] : txn.date.toString();
+        if (txnDateStr >= fromDateStr && txnDateStr <= toDateStr) {
+          resultByDate[txnDateStr] = {
+            date: txnDateStr,
             totalInvested,
             totalRealized,
             totalDividends,

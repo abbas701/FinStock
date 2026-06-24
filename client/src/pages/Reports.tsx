@@ -70,8 +70,8 @@ export default function Reports() {
 
   const { data: runningBalanceData, isLoading: runningBalanceLoading } = trpc.transaction.runningBalanceRange.useQuery(
     {
-      from: new Date(fromDate),
-      to: new Date(toDate),
+      from: new Date(fromDate + "T00:00:00Z"),
+      to: new Date(toDate + "T23:59:59Z"),
     },
     { enabled: !!user && selectedChart === "runningBalance" }
   );
